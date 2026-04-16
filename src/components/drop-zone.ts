@@ -50,7 +50,7 @@ export function registerDropZone(): void {
       ring.setAttribute('radius', String(this.data.radius * 0.85));
       ring.setAttribute('radius-tubular', '0.03');
       ring.setAttribute('rotation', '-90 0 0');
-      ring.setAttribute('material', 'color: #ffffff; opacity: 0.25; transparent: true; shader: flat');
+      ring.setAttribute('material', 'color: #00cfff; opacity: 0.7; transparent: true; shader: flat');
       this.el.appendChild(ring);
       this.ring = ring;
 
@@ -66,7 +66,7 @@ export function registerDropZone(): void {
       if (!this.ring) return;
       this.ring.setAttribute(
         'material',
-        `color: ${active ? '#ffdd00' : '#ffffff'}; opacity: ${active ? 0.75 : 0.25}; transparent: true; shader: flat`,
+        `color: ${active ? '#ffdd00' : '#00cfff'}; opacity: ${active ? 0.9 : 0.7}; transparent: true; shader: flat`,
       );
     },
 

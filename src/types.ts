@@ -1,2 +1,2 @@
-export type ZoneId = 'table' | 'chair';
+export type ZoneId = string;
 export type GameState = 'playing' | 'feedback';
