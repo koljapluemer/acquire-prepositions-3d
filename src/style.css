@@ -1,0 +1,66 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body,
+html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 24px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+#hud-instruction {
+  font-family: system-ui, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 10px 24px;
+  border-radius: 8px;
+}
+
+#hud-feedback {
+  margin-top: 12px;
+  font-family: system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#hud-feedback.visible {
+  opacity: 1;
+}
+
+#hud-feedback.success {
+  color: #22c55e;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+#hud-feedback.error {
+  color: #ef4444;
+  background: rgba(0, 0, 0, 0.4);
+}
