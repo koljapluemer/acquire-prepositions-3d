@@ -1,38 +1,37 @@
 import type { ZoneId, GameState } from '../types.ts';
 import type { HUD } from '../ui/hud.ts';
 
-interface ZoneDropDetail {
-  zoneId: ZoneId;
-  el: Element & { components: { draggable: { snapBack: () => void } } };
+interface MugEl extends Element {
+  components: { draggable: { snapBack: () => void } };
 }
 
 interface DragEndDetail {
-  el: Element & { components: { draggable: { snapBack: () => void } } };
+  el: MugEl;
+  hoveredZoneEl: Element | null;
+}
+
+interface ZoneDropDetail {
+  zoneId: ZoneId;
+  el: MugEl;
 }
 
 export class Game {
   private state: GameState = 'playing';
   private target: ZoneId = 'table';
-  private dropHandled = false;
   private readonly hud: HUD;
-  private readonly sceneEl: Element;
 
   constructor(opts: { hud: HUD; sceneEl: Element }) {
     this.hud = opts.hud;
-    this.sceneEl = opts.sceneEl;
+    const { sceneEl } = opts;
 
-    this.sceneEl.addEventListener('drag-end', (e: Event) => {
-      this.dropHandled = false;
-      const detail = (e as CustomEvent).detail as DragEndDetail;
-      // Give zone-drop a chance to fire synchronously before snapping back
-      setTimeout(() => {
-        if (!this.dropHandled) detail.el.components.draggable.snapBack();
-      }, 0);
+    sceneEl.addEventListener('drag-end', (e: Event) => {
+      const { el, hoveredZoneEl } = (e as CustomEvent<DragEndDetail>).detail;
+      if (!hoveredZoneEl) el.components.draggable.snapBack();
+      // if hoveredZoneEl is set, zone-drop fires synchronously next
     });
 
-    this.sceneEl.addEventListener('zone-drop', (e: Event) => {
-      this.dropHandled = true;
-      const { zoneId, el } = (e as CustomEvent).detail as ZoneDropDetail;
+    sceneEl.addEventListener('zone-drop', (e: Event) => {
+      const { zoneId, el } = (e as CustomEvent<ZoneDropDetail>).detail;
       this.handleDrop(zoneId, el);
     });
   }
@@ -43,10 +42,7 @@ export class Game {
     this.hud.setInstruction(`Place the mug on the ${this.target}`);
   }
 
-  private handleDrop(
-    zoneId: ZoneId,
-    mugEl: Element & { components: { draggable: { snapBack: () => void } } },
-  ): void {
+  private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
     if (this.state !== 'playing') return;
     this.state = 'feedback';
 
@@ -56,9 +52,7 @@ export class Game {
     } else {
       this.hud.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
-      setTimeout(() => {
-        this.state = 'playing';
-      }, 1000);
+      setTimeout(() => { this.state = 'playing'; }, 1000);
     }
   }
 }

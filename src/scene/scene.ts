@@ -33,7 +33,7 @@ export function buildScene(): void {
       <a-entity
         id="table"
         gltf-model="${TABLE_MODEL}"
-        scale="0.25 0.25 0.25"
+        scale="1 1 1"
         position="-2.5 0.545 -1"
         shadow="cast: true; receive: true">
       </a-entity>
@@ -42,7 +42,7 @@ export function buildScene(): void {
       <a-entity
         id="chair"
         gltf-model="${CHAIR_MODEL}"
-        scale="0.3 0.3 0.3"
+        scale="1 1 1"
         position="2.5 0.585 -1"
         shadow="cast: true; receive: true">
       </a-entity>
@@ -51,7 +51,7 @@ export function buildScene(): void {
       <a-entity
         id="mug"
         gltf-model="${MUG_MODEL}"
-        scale="1.2 1.2 1.2"
+        scale="1 1 1"
         position="0 1.1 2.5"
         draggable
         shadow="cast: true">
