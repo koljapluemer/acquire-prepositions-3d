@@ -55,7 +55,7 @@ export function buildScene(): void {
 
       <!-- Lighting -->
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
-      <a-light type="directional" position="3 6 2" intensity="0.8" light="castShadow: true; shadowMapWidth: 2048; shadowMapHeight: 2048"></a-light>
+      <a-light type="directional" position="3 6 2" intensity="0.8" light="castShadow: true; shadowMapWidth: 4096; shadowMapHeight: 4096; shadowCameraLeft: -8; shadowCameraRight: 8; shadowCameraTop: 8; shadowCameraBottom: -8; shadowBias: -0.0005"></a-light>
 
       <!-- Camera (fixed) -->
       <a-entity
