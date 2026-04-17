@@ -2,8 +2,10 @@ import { getGloss, getGlossKeysWithLanguage } from '../language/glossary.ts';
 import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
 import type { HUD } from '../ui/hud.ts';
 
+const CORRECT_FEEDBACK_MS = 1500;
+
 interface MugEl extends Element {
-  components: { draggable: { snapBack: () => void } };
+  components: { draggable: { resetToStartWithFade: (onComplete?: () => void) => void; snapBack: () => void } };
 }
 
 interface DragEndDetail {
@@ -62,7 +64,9 @@ export class Game {
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
       this.hud.showFeedback('Correct!', 'success');
-      setTimeout(() => this.startRound(), 1500);
+      setTimeout(() => {
+        mugEl.components.draggable.resetToStartWithFade(() => this.startRound());
+      }, CORRECT_FEEDBACK_MS);
     } else {
       this.hud.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();

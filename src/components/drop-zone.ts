@@ -1,10 +1,22 @@
 import * as THREE from 'three';
 import type { ZoneId } from '../types.ts';
 
+const RING_IDLE_COLOR = '#00cfff';
+const RING_ACTIVE_COLOR = '#ffdd00';
+const RING_IDLE_OPACITY = 0.7;
+const RING_ACTIVE_OPACITY = 0.95;
+const RING_IDLE_SCALE = 1;
+const RING_PULSE_SCALE = 1.08;
+
 interface SceneEl extends Element {
   addEventListener(event: string, cb: (e: Event) => void): void;
   removeEventListener(event: string, cb: (e: Event) => void): void;
   emit(name: string, detail?: unknown): void;
+}
+
+interface VisualEl extends Element {
+  object3D: THREE.Object3D;
+  setAttribute(name: string, value: string): void;
 }
 
 interface DropZoneEl extends Element {
@@ -20,8 +32,9 @@ interface DragEndDetail {
 interface DropZoneInstance {
   el: DropZoneEl;
   data: { label: ZoneId; radius: number };
-  ring: Element | null;
+  ring: VisualEl | null;
   hitMesh: THREE.Mesh;
+  isHighlighted: boolean;
   _onDragEnd: (e: Event) => void;
   setHighlight(active: boolean): void;
 }
@@ -35,8 +48,9 @@ export function registerDropZone(): void {
       radius: { type: 'number', default: 0.7 },
     },
 
-    ring: null as Element | null,
+    ring: null as VisualEl | null,
     hitMesh: null as unknown as THREE.Mesh,
+    isHighlighted: false,
 
     init(this: DropZoneInstance) {
       // Invisible hit disc for raycasting
@@ -46,11 +60,14 @@ export function registerDropZone(): void {
       this.el.object3D.add(this.hitMesh);
 
       // Visible ring indicator
-      const ring = document.createElement('a-torus');
+      const ring = document.createElement('a-torus') as VisualEl;
       ring.setAttribute('radius', String(this.data.radius * 0.85));
       ring.setAttribute('radius-tubular', '0.03');
       ring.setAttribute('rotation', '-90 0 0');
-      ring.setAttribute('material', 'color: #00cfff; opacity: 0.7; transparent: true; shader: flat');
+      ring.setAttribute(
+        'material',
+        `color: ${RING_IDLE_COLOR}; opacity: ${RING_IDLE_OPACITY}; transparent: true; shader: flat`,
+      );
       this.el.appendChild(ring);
       this.ring = ring;
 
@@ -64,10 +81,21 @@ export function registerDropZone(): void {
 
     setHighlight(this: DropZoneInstance, active: boolean) {
       if (!this.ring) return;
+      this.isHighlighted = active;
+      const color = active ? RING_ACTIVE_COLOR : RING_IDLE_COLOR;
+      const opacity = active ? RING_ACTIVE_OPACITY : RING_IDLE_OPACITY;
       this.ring.setAttribute(
         'material',
-        `color: ${active ? '#ffdd00' : '#00cfff'}; opacity: ${active ? 0.9 : 0.7}; transparent: true; shader: flat`,
+        `color: ${color}; opacity: ${opacity}; transparent: true; shader: flat`,
       );
+      this.ring.object3D.scale.setScalar(active ? RING_PULSE_SCALE : RING_IDLE_SCALE);
+    },
+
+    tick(this: DropZoneInstance, time: number) {
+      if (!this.ring || this.isHighlighted) return;
+      const t = (Math.sin(time * 0.003) + 1) / 2;
+      const scale = THREE.MathUtils.lerp(RING_IDLE_SCALE, RING_PULSE_SCALE, t);
+      this.ring.object3D.scale.setScalar(scale);
     },
 
     _onDragEnd(this: DropZoneInstance, e: Event) {
