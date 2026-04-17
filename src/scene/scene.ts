@@ -8,7 +8,7 @@ const LAYOUT = {
   camera: { x: 0, y: 6, z: 6 },
   cameraRot: { x: -30, y: 0, z: 0 },
   table: { x: -2.5, y: 2.1, z: -1 },
-  chair: { x: 4.5, y: 1.9, z: -1 },
+  chair: { x: 4.5, y: 1.9, z: -.7 },
   mug: { x: 0, y: 4, z: 4.5 },
 };
 
@@ -20,18 +20,55 @@ export const ZONES: Zone[] = [
   },
   {
     key: 'chair',
-    pos: { x: 4.5, y: 2.5, z: -.2 },
+    pos: { x: 4.5, y: 2.5, z: 0 },
     glossKeys: ['chair-on'],
   },
   {
     key: 'between-both',
-    pos: { x: 2.68, y: 0.04, z: -.08 },
+    pos: { x: 2.68, y: 0.04, z: -1 },
     glossKeys: ['chair-next-to', 'table-next-to', 'table-chair-between', 'table-right-of', 'chair-left-of'],
   },
   {
     key: 'table-left-of',
-    pos: { x: -7.5, y: 0.04, z: -.08 },
+    pos: { x: -7.5, y: 0.04, z: -1 },
     glossKeys: ['table-next-to', 'table-left-of'],
+  },
+  {
+    key: 'table-below',
+    pos: { x: -3.5, y: 0.04, z: -1 },
+    glossKeys: ['table-below'],
+  },
+  {
+    key: 'table-in-front-of',
+    pos: { x: -3.5, y: 0.04, z: 1.5 },
+    glossKeys: ['table-below', 'table-next-to'],
+  },
+  {
+    key: 'table-behind',
+    pos: { x: -3.5, y: 0.04, z: -3.5 },
+    glossKeys: ['table-below', 'table-next-to'],
+  },
+  {
+    key: 'chair-below',
+    pos: { x: 4.5, y: 0.04, z: -1 },
+    glossKeys: ['chair-below'],
+  },
+  {
+    key: 'chair-right-of',
+    pos: { x: 6.5, y: 0.04, z: -1 },
+    glossKeys: ['chair-right-of', 'chair-next-to'],
+  }
+  ,
+  {
+    key: 'chair-in-front-of',
+    pos: { x: 4.5, y: 0.04, z: 1 },
+    glossKeys: ['chair-in-front-of', 'chair-next-to'],
+  }
+  ,
+  {
+    key: 'chair-behind',
+    pos: { x: 4.5, y: 0.04, z: -3 },
+    glossKeys: ['chair-behind', 'chair-next-to'],
   }
 ];
 

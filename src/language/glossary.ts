@@ -17,7 +17,7 @@ type Languages = Record<LanguageCode, LanguageMetadata>;
 const glosses = rawGlosses as Glosses;
 const languages = rawLanguages as Languages;
 
-export const DEFAULT_LANGUAGE: LanguageCode = languages.deu ? 'deu' : Object.keys(languages)[0] ?? 'eng';
+export const DEFAULT_LANGUAGE: LanguageCode = 'deu'
 
 export function getLanguageOptions(): LanguageOption[] {
   return Object.entries(languages).map(([code, metadata]) => ({
