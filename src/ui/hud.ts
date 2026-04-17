@@ -88,7 +88,7 @@ export class HUD {
     for (const language of this.languages) {
       const option = document.createElement('option');
       option.value = language.code;
-      option.textContent = `${language.symbols.join(' ')} ${language.displayName}`;
+      option.textContent = language.displayName;
       languageSelect.appendChild(option);
     }
     languageSelect.value = selectedLanguage;

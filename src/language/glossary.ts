@@ -1,18 +1,14 @@
-import rawGlosses from './data.json';
-import rawLanguages from './languages.json';
+import rawGlosses from '@public/data/data.json';
+import rawLanguages from '@public/data/languages.json';
 import type { GlossKey, LanguageCode } from '../types.ts';
 
-interface LanguageMetadata {
-  displayName: string;
-  symbols: string[];
-}
-
-export interface LanguageOption extends LanguageMetadata {
+export interface LanguageOption {
   code: LanguageCode;
+  displayName: string;
 }
 
 type Glosses = Record<GlossKey, Partial<Record<LanguageCode, string>>>;
-type Languages = Record<LanguageCode, LanguageMetadata>;
+type Languages = Record<LanguageCode, string>;
 
 const glosses = rawGlosses as Glosses;
 const languages = rawLanguages as Languages;
@@ -20,9 +16,9 @@ const languages = rawLanguages as Languages;
 export const DEFAULT_LANGUAGE: LanguageCode = 'deu'
 
 export function getLanguageOptions(): LanguageOption[] {
-  return Object.entries(languages).map(([code, metadata]) => ({
+  return Object.entries(languages).map(([code, displayName]) => ({
     code,
-    ...metadata,
+    displayName,
   }));
 }
 

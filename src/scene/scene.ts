@@ -57,14 +57,12 @@ export const ZONES: Zone[] = [
     key: 'chair-right-of',
     pos: { x: 6.5, y: 0.04, z: -1 },
     glossKeys: ['chair-right-of', 'chair-next-to'],
-  }
-  ,
+  },
   {
     key: 'chair-in-front-of',
     pos: { x: 4.5, y: 0.04, z: 1 },
     glossKeys: ['chair-in-front-of', 'chair-next-to'],
-  }
-  ,
+  },
   {
     key: 'chair-behind',
     pos: { x: 4.5, y: 0.04, z: -3 },
