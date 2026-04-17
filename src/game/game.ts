@@ -1,4 +1,4 @@
-import { getGloss, getGlossKeysWithLanguage } from '../language/glossary.ts';
+import { getGlossKeysWithLanguage, getGlossPrompt } from '../language/glossary.ts';
 import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
 import type { HUD } from '../ui/hud.ts';
 
@@ -69,7 +69,7 @@ export class Game {
     }
     this.syncUnlockedZones();
     this.target = this.pickTaskFromUnlockedZones();
-    this.hud.setInstruction(getGloss(this.target, this.language));
+    this.hud.setInstruction(getGlossPrompt(this.target, this.language));
   }
 
   setLanguage(language: LanguageCode): void {

@@ -1,5 +1,5 @@
 import type { LanguageCode } from '../types.ts';
-import type { LanguageOption } from '../language/glossary.ts';
+import type { GlossPrompt, LanguageOption } from '../language/glossary.ts';
 
 interface HUDOptions {
   languages: LanguageOption[];
@@ -9,6 +9,8 @@ interface HUDOptions {
 
 export class HUD {
   private instruction: HTMLElement;
+  private audioButton: HTMLButtonElement;
+  private instructionAudio: HTMLAudioElement;
   private feedback: HTMLElement;
   private settingsButton: HTMLButtonElement;
   private modal: HTMLElement;
@@ -32,11 +34,22 @@ export class HUD {
     this.instruction = document.createElement('div');
     this.instruction.id = 'hud-instruction';
 
+    this.audioButton = document.createElement('button');
+    this.audioButton.id = 'audio-replay-button';
+    this.audioButton.type = 'button';
+    this.audioButton.textContent = 'Play audio';
+    this.audioButton.addEventListener('click', () => this.replayInstructionAudio());
+
+    this.instructionAudio = document.createElement('audio');
+    this.instructionAudio.preload = 'auto';
+
     this.feedback = document.createElement('div');
     this.feedback.id = 'hud-feedback';
 
     hud.appendChild(this.settingsButton);
     hud.appendChild(this.instruction);
+    hud.appendChild(this.audioButton);
+    hud.appendChild(this.instructionAudio);
     hud.appendChild(this.feedback);
     document.body.appendChild(hud);
 
@@ -47,8 +60,9 @@ export class HUD {
     this.updateSettingsButton(opts.selectedLanguage);
   }
 
-  setInstruction(text: string): void {
-    this.instruction.textContent = text;
+  setInstruction(prompt: GlossPrompt): void {
+    this.instruction.textContent = prompt.text;
+    this.setInstructionAudio(prompt.audioUrl);
   }
 
   showFeedback(text: string, type: 'success' | 'error'): void {
@@ -136,6 +150,37 @@ export class HUD {
 
   private closeSettings(): void {
     this.modal.classList.add('hidden');
+  }
+
+  private setInstructionAudio(audioUrl: string | null): void {
+    this.instructionAudio.pause();
+    this.instructionAudio.removeAttribute('src');
+    this.instructionAudio.load();
+
+    if (!audioUrl) {
+      this.audioButton.hidden = true;
+      this.audioButton.disabled = true;
+      return;
+    }
+
+    this.instructionAudio.src = audioUrl;
+    this.instructionAudio.load();
+    this.audioButton.hidden = false;
+    this.audioButton.disabled = false;
+    this.audioButton.textContent = 'Replay audio';
+    this.audioButton.setAttribute('aria-label', 'Replay instruction audio');
+    void this.replayInstructionAudio();
+  }
+
+  private async replayInstructionAudio(): Promise<void> {
+    if (!this.instructionAudio.src) return;
+
+    try {
+      this.instructionAudio.currentTime = 0;
+      await this.instructionAudio.play();
+    } catch {
+      // Browsers can block playback until the player presses the replay button.
+    }
   }
 
   private updateSettingsButton(languageCode: LanguageCode): void {
