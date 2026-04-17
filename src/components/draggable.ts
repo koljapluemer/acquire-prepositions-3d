@@ -25,6 +25,7 @@ interface DropZoneEl extends Element {
 
 interface DropZoneComponent {
   hitMesh: THREE.Mesh;
+  isUnlocked: boolean;
   setHighlight(active: boolean): void;
 }
 
@@ -67,7 +68,7 @@ function getDropZones(): { el: DropZoneEl; component: DropZoneComponent }[] {
     el: el as DropZoneEl,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     component: (el as any).components['drop-zone'] as DropZoneComponent,
-  }));
+  })).filter((zone) => zone.component.isUnlocked);
 }
 
 function getMeshMaterials(root: THREE.Object3D): THREE.Material[] {

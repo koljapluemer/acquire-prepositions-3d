@@ -41,7 +41,7 @@ export const ZONES: Zone[] = [
   {
     key: 'table-in-front-of',
     pos: { x: -3.5, y: 0.04, z: 1.5 },
-    glossKeys: ['table-below', 'table-next-to'],
+    glossKeys: ['table-in-front-of', 'table-next-to'],
   },
   {
     key: 'table-behind',

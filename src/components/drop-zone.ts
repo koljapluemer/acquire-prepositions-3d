@@ -34,8 +34,10 @@ interface DropZoneInstance {
   data: { label: ZoneId; radius: number };
   ring: VisualEl | null;
   hitMesh: THREE.Mesh;
+  isUnlocked: boolean;
   isHighlighted: boolean;
   _onDragEnd: (e: Event) => void;
+  setUnlocked(unlocked: boolean): void;
   setHighlight(active: boolean): void;
 }
 
@@ -50,6 +52,7 @@ export function registerDropZone(): void {
 
     ring: null as VisualEl | null,
     hitMesh: null as unknown as THREE.Mesh,
+    isUnlocked: false,
     isHighlighted: false,
 
     init(this: DropZoneInstance) {
@@ -70,6 +73,7 @@ export function registerDropZone(): void {
       );
       this.el.appendChild(ring);
       this.ring = ring;
+      this.setUnlocked(false);
 
       this._onDragEnd = this._onDragEnd.bind(this);
       this.el.sceneEl.addEventListener('drag-end', this._onDragEnd);
@@ -77,6 +81,14 @@ export function registerDropZone(): void {
 
     remove(this: DropZoneInstance) {
       this.el.sceneEl.removeEventListener('drag-end', this._onDragEnd);
+    },
+
+    setUnlocked(this: DropZoneInstance, unlocked: boolean) {
+      this.isUnlocked = unlocked;
+      this.hitMesh.visible = unlocked;
+      if (!this.ring) return;
+      this.ring.object3D.visible = unlocked;
+      if (!unlocked) this.setHighlight(false);
     },
 
     setHighlight(this: DropZoneInstance, active: boolean) {
@@ -92,7 +104,7 @@ export function registerDropZone(): void {
     },
 
     tick(this: DropZoneInstance, time: number) {
-      if (!this.ring || this.isHighlighted) return;
+      if (!this.isUnlocked || !this.ring || this.isHighlighted) return;
       const t = (Math.sin(time * 0.003) + 1) / 2;
       const scale = THREE.MathUtils.lerp(RING_IDLE_SCALE, RING_PULSE_SCALE, t);
       this.ring.object3D.scale.setScalar(scale);
@@ -101,7 +113,7 @@ export function registerDropZone(): void {
     _onDragEnd(this: DropZoneInstance, e: Event) {
       const { hoveredZoneEl, el } = (e as CustomEvent<DragEndDetail>).detail;
       this.setHighlight(false);
-      if (hoveredZoneEl === this.el) {
+      if (this.isUnlocked && hoveredZoneEl === this.el) {
         this.el.sceneEl.emit('zone-drop', { zoneId: this.data.label, el });
       }
     },

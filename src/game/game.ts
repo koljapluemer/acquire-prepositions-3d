@@ -3,6 +3,7 @@ import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.t
 import type { HUD } from '../ui/hud.ts';
 
 const CORRECT_FEEDBACK_MS = 1500;
+const LEARNING_EVENTS_STORAGE_KEY = 'acquire-prepositions-3d:learning-events';
 
 interface MugEl extends Element {
   components: { draggable: { resetToStartWithFade: (onComplete?: () => void) => void; snapBack: () => void } };
@@ -18,19 +19,35 @@ interface ZoneDropDetail {
   el: MugEl;
 }
 
+interface DropZoneComponent {
+  setUnlocked(unlocked: boolean): void;
+}
+
+interface LearningEvent {
+  glossKey: GlossKey;
+  language: LanguageCode;
+  zoneId: ZoneId;
+  completedAt: string;
+}
+
 export class Game {
   private state: GameState = 'playing';
   private target: GlossKey = '';
+  private unlockedZoneIds = new Set<ZoneId>();
+  private completedGlossKeys = new Set<GlossKey>();
   private readonly hud: HUD;
+  private readonly sceneEl: Element;
   private readonly zones: Zone[];
   private readonly zonesById: Map<ZoneId, Zone>;
   private language: LanguageCode;
 
   constructor(opts: { hud: HUD; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
     this.hud = opts.hud;
+    this.sceneEl = opts.sceneEl;
     this.zones = opts.zones;
     this.zonesById = new Map(this.zones.map((zone) => [zone.key, zone]));
     this.language = opts.language;
+    this.completedGlossKeys = this.loadCompletedGlossKeys();
     const { sceneEl } = opts;
 
     sceneEl.addEventListener('drag-end', (e: Event) => {
@@ -47,8 +64,11 @@ export class Game {
 
   startRound(): void {
     this.state = 'playing';
-    const candidates = this.getCandidateGlossKeys();
-    this.target = candidates[Math.floor(Math.random() * candidates.length)];
+    if (this.unlockedZoneIds.size === 0) {
+      this.unlockRandomZone();
+    }
+    this.syncUnlockedZones();
+    this.target = this.pickTaskFromUnlockedZones();
     this.hud.setInstruction(getGloss(this.target, this.language));
   }
 
@@ -63,9 +83,15 @@ export class Game {
 
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
+      this.recordLearningEvent(zoneId);
       this.hud.showFeedback('Correct!', 'success');
       setTimeout(() => {
-        mugEl.components.draggable.resetToStartWithFade(() => this.startRound());
+        mugEl.components.draggable.resetToStartWithFade(() => {
+          if (this.allUnlockedTasksCompleted()) {
+            this.unlockRandomZone();
+          }
+          this.startRound();
+        });
       }, CORRECT_FEEDBACK_MS);
     } else {
       this.hud.showFeedback('Try again!', 'error');
@@ -74,12 +100,101 @@ export class Game {
     }
   }
 
-  private getCandidateGlossKeys(): GlossKey[] {
-    const uniqueGlossKeys = [...new Set(this.zones.flatMap((zone) => zone.glossKeys))];
-    const candidates = getGlossKeysWithLanguage(uniqueGlossKeys, this.language);
+  private pickTaskFromUnlockedZones(): GlossKey {
+    const candidates = this.getUnlockedCandidateGlossKeys();
     if (candidates.length === 0) {
-      throw new Error(`No gloss data found for language "${this.language}".`);
+      throw new Error(`No unlocked zones have gloss data for language "${this.language}".`);
     }
-    return candidates;
+
+    const uncompletedCandidates = candidates.filter((glossKey) => !this.completedGlossKeys.has(glossKey));
+    const shouldPreferUncompleted = Math.random() < 0.5 && uncompletedCandidates.length > 0;
+    const preferredCandidates = shouldPreferUncompleted ? uncompletedCandidates : candidates;
+    const nonRepeatingCandidates = preferredCandidates.filter((glossKey) => glossKey !== this.target);
+    const taskCandidates = this.target && nonRepeatingCandidates.length > 0
+      ? nonRepeatingCandidates
+      : preferredCandidates;
+    return taskCandidates[Math.floor(Math.random() * taskCandidates.length)];
+  }
+
+  private getZoneCandidateGlossKeys(zone: Zone): GlossKey[] {
+    return getGlossKeysWithLanguage(zone.glossKeys, this.language);
+  }
+
+  private getUnlockedCandidateGlossKeys(): GlossKey[] {
+    return [...new Set(
+      this.zones
+        .filter((zone) => this.unlockedZoneIds.has(zone.key))
+        .flatMap((zone) => this.getZoneCandidateGlossKeys(zone)),
+    )];
+  }
+
+  private allUnlockedTasksCompleted(): boolean {
+    const candidates = this.getUnlockedCandidateGlossKeys();
+    return candidates.length > 0 && candidates.every((glossKey) => this.completedGlossKeys.has(glossKey));
+  }
+
+  private unlockRandomZone(): void {
+    const lockedZones = this.zones.filter((zone) => !this.unlockedZoneIds.has(zone.key));
+    if (lockedZones.length === 0) return;
+
+    const zonesWithTasks = lockedZones.filter((zone) => this.getZoneCandidateGlossKeys(zone).length > 0);
+    const candidates = zonesWithTasks.length > 0 ? zonesWithTasks : lockedZones;
+    const zone = candidates[Math.floor(Math.random() * candidates.length)];
+    this.unlockedZoneIds.add(zone.key);
+  }
+
+  private syncUnlockedZones(): void {
+    this.zones.forEach((zone) => {
+      const component = this.getDropZoneComponent(zone.key);
+      component?.setUnlocked(this.unlockedZoneIds.has(zone.key));
+    });
+  }
+
+  private getDropZoneComponent(zoneId: ZoneId): DropZoneComponent | null {
+    const zoneEl = this.sceneEl.querySelector(`#zone-${zoneId}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((zoneEl as any)?.components?.['drop-zone'] as DropZoneComponent | undefined) ?? null;
+  }
+
+  private recordLearningEvent(zoneId: ZoneId): void {
+    const events = this.loadLearningEvents();
+    const event: LearningEvent = {
+      glossKey: this.target,
+      language: this.language,
+      zoneId,
+      completedAt: new Date().toISOString(),
+    };
+    events.push(event);
+    this.completedGlossKeys.add(this.target);
+    this.saveLearningEvents(events);
+  }
+
+  private loadCompletedGlossKeys(): Set<GlossKey> {
+    return new Set(this.loadLearningEvents().map((event) => event.glossKey));
+  }
+
+  private loadLearningEvents(): LearningEvent[] {
+    try {
+      const rawEvents = window.localStorage.getItem(LEARNING_EVENTS_STORAGE_KEY);
+      if (!rawEvents) return [];
+      const events = JSON.parse(rawEvents);
+      if (!Array.isArray(events)) return [];
+      return events.filter((event): event is LearningEvent => (
+        typeof event?.glossKey === 'string'
+        && typeof event?.language === 'string'
+        && typeof event?.zoneId === 'string'
+        && typeof event?.completedAt === 'string'
+      ));
+    } catch {
+      return [];
+    }
+  }
+
+  private saveLearningEvents(events: LearningEvent[]): void {
+    try {
+      window.localStorage.setItem(LEARNING_EVENTS_STORAGE_KEY, JSON.stringify(events));
+    } catch {
+      // localStorage can fail in private browsing or when quota is exceeded.
+    }
   }
 }
