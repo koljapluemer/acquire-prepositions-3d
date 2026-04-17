@@ -1,0 +1,14 @@
+{
+    "table-on": {
+        "eng": "Place the mug on the table.",
+        "deu": "Stell die Tasse auf den Tisch."
+    },
+    "chair-on": {
+        "eng": "Place the mug on the chair.",
+        "deu": "Stell die Tasse auf den Stuhl."
+    },
+    "table-next-to": {
+        "eng": "Place the mug next to the table.",
+        "deu": "Stell die Tasse neben den Tisch."
+    }
+}

@@ -1,0 +1,18 @@
+{
+
+  "deu": {
+    "displayName": "German",
+    "symbols": [
+      "🇩🇪",
+      "🇦🇹",
+      "ä"
+    ]
+  },
+  "eng": {
+    "displayName": "English",
+    "symbols": [
+      "🇺🇸",
+      "🇬🇧"
+    ]
+  }
+}

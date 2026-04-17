@@ -1,4 +1,5 @@
-import type { ZoneId, GameState } from '../types.ts';
+import { getGloss, getGlossKeysWithLanguage } from '../language/glossary.ts';
+import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
 import type { HUD } from '../ui/hud.ts';
 
 interface MugEl extends Element {
@@ -17,11 +18,17 @@ interface ZoneDropDetail {
 
 export class Game {
   private state: GameState = 'playing';
-  private target: ZoneId = 'table';
+  private target: GlossKey = '';
   private readonly hud: HUD;
+  private readonly zones: Zone[];
+  private readonly zonesById: Map<ZoneId, Zone>;
+  private language: LanguageCode;
 
-  constructor(opts: { hud: HUD; sceneEl: Element }) {
+  constructor(opts: { hud: HUD; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
     this.hud = opts.hud;
+    this.zones = opts.zones;
+    this.zonesById = new Map(this.zones.map((zone) => [zone.key, zone]));
+    this.language = opts.language;
     const { sceneEl } = opts;
 
     sceneEl.addEventListener('drag-end', (e: Event) => {
@@ -38,21 +45,37 @@ export class Game {
 
   startRound(): void {
     this.state = 'playing';
-    this.target = Math.random() < 0.5 ? 'table' : 'chair';
-    this.hud.setInstruction(`Place the mug on the ${this.target}`);
+    const candidates = this.getCandidateGlossKeys();
+    this.target = candidates[Math.floor(Math.random() * candidates.length)];
+    this.hud.setInstruction(getGloss(this.target, this.language));
+  }
+
+  setLanguage(language: LanguageCode): void {
+    this.language = language;
+    this.startRound();
   }
 
   private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
     if (this.state !== 'playing') return;
     this.state = 'feedback';
 
-    if (zoneId === this.target) {
-      this.hud.showFeedback('Correct! ✓', 'success');
+    const zone = this.zonesById.get(zoneId);
+    if (zone?.glossKeys.includes(this.target)) {
+      this.hud.showFeedback('Correct!', 'success');
       setTimeout(() => this.startRound(), 1500);
     } else {
       this.hud.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
       setTimeout(() => { this.state = 'playing'; }, 1000);
     }
+  }
+
+  private getCandidateGlossKeys(): GlossKey[] {
+    const uniqueGlossKeys = [...new Set(this.zones.flatMap((zone) => zone.glossKeys))];
+    const candidates = getGlossKeysWithLanguage(uniqueGlossKeys, this.language);
+    if (candidates.length === 0) {
+      throw new Error(`No gloss data found for language "${this.language}".`);
+    }
+    return candidates;
   }
 }

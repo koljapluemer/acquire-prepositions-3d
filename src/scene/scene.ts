@@ -1,23 +1,18 @@
+import type { Zone } from '../types.ts';
+
 const DEBUG_GROUND = false;
 
 // A-Frame axes: x = left/right, y = up/down, z = towards/away from camera
 // A-Frame rotation (degrees): x = tilt up/down (pitch), y = turn left/right (yaw), z = roll
 const LAYOUT = {
-  camera:    { x: 0,    y: 6,   z: 6   },
-  cameraRot: { x: -30,  y: 0,   z: 0   },
-  table:     { x: -2.5, y: 2.1, z: -1  },
-  chair:     { x: 4.5,  y: 1.9, z: -1  },
-  mug:       { x: 0,    y: 4,   z: 4.5 },
+  camera: { x: 0, y: 6, z: 6 },
+  cameraRot: { x: -30, y: 0, z: 0 },
+  table: { x: -2.5, y: 2.1, z: -1 },
+  chair: { x: 4.5, y: 1.9, z: -1 },
+  mug: { x: 0, y: 4, z: 4.5 },
 };
 
-interface Zone {
-  key: string;
-  pos: { x: number; y: number; z: number };
-  // Gloss keys that describe this spatial relation, matched against language glossaries
-  glossKeys: string[];
-}
-
-const ZONES: Zone[] = [
+export const ZONES: Zone[] = [
   {
     key: 'table',
     pos: { x: -2.5, y: 4, z: -1 },
@@ -28,6 +23,16 @@ const ZONES: Zone[] = [
     pos: { x: 4.5, y: 2.5, z: -.2 },
     glossKeys: ['chair-on'],
   },
+  {
+    key: 'between-both',
+    pos: { x: 2.68, y: 0.04, z: -.08 },
+    glossKeys: ['chair-next-to', 'table-next-to', 'table-chair-between', 'table-right-of', 'chair-left-of'],
+  },
+  {
+    key: 'table-left-of',
+    pos: { x: -7.5, y: 0.04, z: -.08 },
+    glossKeys: ['table-next-to', 'table-left-of'],
+  }
 ];
 
 const TABLE_MODEL = new URL('../assets/models/Table.glb', import.meta.url).href;
