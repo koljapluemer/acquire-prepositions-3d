@@ -102,7 +102,7 @@ export function buildScene(): void {
       xr-mode
       cursor__mouse="rayOrigin: mouse"
       cursor__xrselect="rayOrigin: xrselect"
-      raycaster="objects: .ui-interactable, .grabbable"
+      raycaster="objects: .ui-interactable, .grabbable, .drop-target"
       shadow="type: pcfsoft">
 
       <!-- Environment -->
@@ -142,13 +142,13 @@ export function buildScene(): void {
         <a-entity
           id="left-controller"
           laser-controls="hand: left"
-          raycaster="objects: .ui-interactable, .grabbable"
+          raycaster="objects: .ui-interactable, .grabbable, .drop-target"
           cursor="rayOrigin: entity; fuse: false">
         </a-entity>
         <a-entity
           id="right-controller"
           laser-controls="hand: right"
-          raycaster="objects: .ui-interactable, .grabbable"
+          raycaster="objects: .ui-interactable, .grabbable, .drop-target"
           cursor="rayOrigin: entity; fuse: false">
         </a-entity>
       </a-entity>

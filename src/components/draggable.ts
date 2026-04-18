@@ -6,6 +6,7 @@ const MUG_IDLE_BOB_SPEED = 0.0018;
 const MUG_DRAG_SCALE_FACTOR = 1.04;
 const MUG_RESET_FADE_OUT_MS = 350;
 const MUG_RESET_FADE_IN_MS = 250;
+const GRABBABLE_CLASS = 'grabbable';
 
 interface SceneEl extends Element {
   canvas: HTMLCanvasElement;
@@ -33,6 +34,7 @@ interface ControllerEl extends Element {
   components: {
     raycaster?: {
       raycaster: THREE.Raycaster;
+      refreshObjects?: () => void;
       updateOriginDirection: () => void;
     };
   };
@@ -50,6 +52,7 @@ interface DraggableInstance {
   isPointerOver: boolean;
   isSnapping: boolean;
   isResetting: boolean;
+  isInteractionEnabled: boolean;
   activeSourceId: string | null;
   activeControllerEl: ControllerEl | null;
   controllerEls: ControllerEl[];
@@ -78,7 +81,10 @@ interface DraggableInstance {
   setHoveredZone: (zone: Element | null) => void;
   setCanvasCursor: (cursor: string) => void;
   resetToStartWithFade: (onComplete?: () => void) => void;
+  setInteractionEnabled(enabled: boolean): void;
   setInteractiveVisual(active: boolean): void;
+  setRaycastable(active: boolean): void;
+  syncRaycastable: () => void;
 }
 
 interface MaterialState {
@@ -180,6 +186,7 @@ export function registerDraggable(): void {
     isPointerOver: false,
     isSnapping: false,
     isResetting: false,
+    isInteractionEnabled: true,
     activeSourceId: null as string | null,
     activeControllerEl: null as ControllerEl | null,
     controllerEls: [] as ControllerEl[],
@@ -196,6 +203,7 @@ export function registerDraggable(): void {
       this.isPointerOver = false;
       this.isSnapping = false;
       this.isResetting = false;
+      this.isInteractionEnabled = true;
       this.activeSourceId = null;
       this.activeControllerEl = null;
       this.controllerEls = Array.from(document.querySelectorAll('#left-controller, #right-controller')) as ControllerEl[];
@@ -244,12 +252,14 @@ export function registerDraggable(): void {
     },
 
     _onCanvasMouseDown(this: DraggableInstance, evt: MouseEvent) {
+      if (!this.isInteractionEnabled) return;
       if (this.isResetting) return;
       if (this.el.sceneEl.is('vr-mode')) return;
       this.tryBeginDrag(this.getMouseRay(evt), 'mouse');
     },
 
     _onWindowMouseMove(this: DraggableInstance, evt: MouseEvent) {
+      if (!this.isInteractionEnabled) return;
       if (isSceneUIOpen(this.el.sceneEl)) return;
       if (this.isResetting) return;
       if (this.el.sceneEl.is('vr-mode')) return;
@@ -268,6 +278,7 @@ export function registerDraggable(): void {
     },
 
     _onMugCursorMouseDown(this: DraggableInstance, evt: Event) {
+      if (!this.isInteractionEnabled) return;
       if (this.isResetting) return;
       if (!this.el.sceneEl.is('vr-mode')) return;
       const { cursorEl } = (evt as CustomEvent<CursorEventDetail>).detail ?? {};
@@ -284,12 +295,24 @@ export function registerDraggable(): void {
       const { cursorEl } = (evt as CustomEvent<CursorEventDetail>).detail ?? {};
       const controllerEl = this.controllerEls.find((el) => el === cursorEl);
       if (!controllerEl) return;
+      if (this.isDragging && this.activeSourceId === controllerEl.id) {
+        this.updateDragFromRay(this.getControllerRay(controllerEl));
+      }
       this.endDrag(controllerEl.id);
     },
 
     _onControllerRelease(this: DraggableInstance, evt: Event) {
       const controllerEl = evt.currentTarget as ControllerEl | null;
       if (!controllerEl) return;
+      if (this.isDragging && this.activeSourceId === controllerEl.id) {
+        try {
+          this.updateDragFromRay(this.getControllerRay(controllerEl));
+        } catch (error) {
+          console.warn('Cancelling mug drag after final controller ray update failed.', error);
+          this.cancelDrag();
+          return;
+        }
+      }
       this.endDrag(controllerEl.id);
     },
 
@@ -318,7 +341,9 @@ export function registerDraggable(): void {
     },
 
     tryBeginDrag(this: DraggableInstance, ray: THREE.Ray, sourceId: string): boolean {
-      if (this.isDragging || isSceneUIOpen(this.el.sceneEl)) return false;
+      if (!this.isInteractionEnabled || this.isDragging || this.isSnapping || this.isResetting || isSceneUIOpen(this.el.sceneEl)) {
+        return false;
+      }
       this.raycaster.ray.copy(ray);
       if (this.raycaster.intersectObjects(getUIButtons().map((el) => el.object3D), true).length > 0) {
         return false;
@@ -336,6 +361,7 @@ export function registerDraggable(): void {
       this.isDragging = true;
       this.activeSourceId = sourceId;
       this.setInteractiveVisual(true);
+      this.syncRaycastable();
       this.setCanvasCursor('grabbing');
       return true;
     },
@@ -369,14 +395,16 @@ export function registerDraggable(): void {
     endDrag(this: DraggableInstance, sourceId: string) {
       if (!this.isDragging) return;
       if (this.activeSourceId !== sourceId) return;
+      const droppedZone = this.hoveredZone;
       this.isDragging = false;
       this.activeSourceId = null;
       this.activeControllerEl = null;
       this.setInteractiveVisual(false);
+      this.syncRaycastable();
       this.setCanvasCursor(this.isPointerOver ? 'grab' : 'default');
-      this.el.sceneEl.emit('drag-end', { el: this.el, hoveredZoneEl: this.hoveredZone });
-      if (this.hoveredZone) this.idleBasePosition.copy(this.el.object3D.position);
-      this.setHoveredZone(null);
+      if (droppedZone) this.idleBasePosition.copy(this.el.object3D.position);
+      this.el.sceneEl.emit('drag-end', { el: this.el, hoveredZoneEl: droppedZone });
+      if (this.hoveredZone === droppedZone) this.setHoveredZone(null);
     },
 
     cancelDrag(this: DraggableInstance) {
@@ -387,6 +415,7 @@ export function registerDraggable(): void {
       this.el.object3D.position.copy(this.originPosition);
       this.idleBasePosition.copy(this.originPosition);
       this.setInteractiveVisual(false);
+      this.syncRaycastable();
       this.setHoveredZone(null);
       this.setCanvasCursor('default');
     },
@@ -443,6 +472,7 @@ export function registerDraggable(): void {
         } else {
           this.idleBasePosition.copy(target);
           this.isSnapping = false;
+          this.syncRaycastable();
         }
       };
       requestAnimationFrame(animate);
@@ -464,6 +494,7 @@ export function registerDraggable(): void {
       this.activeControllerEl = null;
       this.setHoveredZone(null);
       this.setInteractiveVisual(false);
+      this.syncRaycastable();
       this.setCanvasCursor('default');
 
       const states: MaterialState[] = materials.map((material) => ({
@@ -491,14 +522,38 @@ export function registerDraggable(): void {
             material.needsUpdate = true;
           });
           this.isResetting = false;
+          this.syncRaycastable();
           onComplete?.();
         });
       });
     },
 
+    setInteractionEnabled(this: DraggableInstance, enabled: boolean) {
+      this.isInteractionEnabled = enabled;
+      if (!enabled) {
+        this.cancelDrag();
+        this.isPointerOver = false;
+        this.setInteractiveVisual(false);
+        this.setHoveredZone(null);
+        this.setCanvasCursor('default');
+      }
+      this.syncRaycastable();
+    },
+
     setInteractiveVisual(this: DraggableInstance, active: boolean) {
       const factor = active ? MUG_DRAG_SCALE_FACTOR : 1;
       this.el.object3D.scale.copy(this.idleScale).multiplyScalar(factor);
+    },
+
+    setRaycastable(this: DraggableInstance, active: boolean) {
+      this.el.classList.toggle(GRABBABLE_CLASS, active);
+      this.controllerEls.forEach((controllerEl) => {
+        controllerEl.components.raycaster?.refreshObjects?.();
+      });
+    },
+
+    syncRaycastable(this: DraggableInstance) {
+      this.setRaycastable(this.isInteractionEnabled && !this.isDragging && !this.isSnapping && !this.isResetting);
     },
 
     tick(this: DraggableInstance, time: number) {
@@ -522,7 +577,7 @@ export function registerDraggable(): void {
         this.idleBasePosition.z,
       );
 
-      if (this.el.sceneEl.is('vr-mode')) {
+      if (this.isInteractionEnabled && this.el.sceneEl.is('vr-mode')) {
         const controllerEl = this.controllerEls.find((el) => {
           const ray = this.getControllerRay(el);
           this.raycaster.ray.copy(ray);

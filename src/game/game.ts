@@ -6,7 +6,7 @@ const CORRECT_FEEDBACK_MS = 1500;
 const LEARNING_EVENTS_STORAGE_KEY = 'acquire-prepositions-3d:learning-events';
 
 interface MugEl extends Element {
-  components: { draggable: { resetToStartWithFade: (onComplete?: () => void) => void; snapBack: () => void } };
+  components: { draggable: { resetToStartWithFade: (onComplete?: () => void) => void; setInteractionEnabled: (enabled: boolean) => void; snapBack: () => void } };
 }
 
 interface DragEndDetail {
@@ -67,6 +67,8 @@ export class Game {
       const { zoneId, el } = (e as CustomEvent<ZoneDropDetail>).detail;
       this.handleDrop(zoneId, el);
     });
+
+    this.setMugInteractionEnabled(false);
   }
 
   startRound(): void {
@@ -79,6 +81,7 @@ export class Game {
     this.syncUnlockedZones();
     this.target = this.pickTaskFromUnlockedZones();
     this.ui.setInstruction(getGlossPrompt(this.target, this.language));
+    this.setMugInteractionEnabled(true);
   }
 
   exitGame(): void {
@@ -87,6 +90,7 @@ export class Game {
     this.state = 'idle';
     this.target = '';
     this.unlockedZoneIds.clear();
+    this.setMugInteractionEnabled(false);
     this.syncUnlockedZones();
     this.resetMug();
   }
@@ -99,6 +103,7 @@ export class Game {
   private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
     if (this.state !== 'playing') return;
     this.state = 'feedback';
+    this.setMugInteractionEnabled(false);
 
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
@@ -122,7 +127,10 @@ export class Game {
       const sessionId = this.sessionId;
       this.feedbackTimer = setTimeout(() => {
         this.feedbackTimer = null;
-        if (this.sessionId === sessionId && this.state !== 'idle') this.state = 'playing';
+        if (this.sessionId === sessionId && this.state !== 'idle') {
+          this.state = 'playing';
+          this.setMugInteractionEnabled(true);
+        }
       }, 1000);
     }
   }
@@ -136,6 +144,11 @@ export class Game {
   private resetMug(): void {
     const mugEl = this.sceneEl.querySelector('#mug') as MugEl | null;
     mugEl?.components.draggable.resetToStartWithFade();
+  }
+
+  private setMugInteractionEnabled(enabled: boolean): void {
+    const mugEl = this.sceneEl.querySelector('#mug') as MugEl | null;
+    mugEl?.components.draggable.setInteractionEnabled(enabled);
   }
 
   private pickTaskFromUnlockedZones(): GlossKey {

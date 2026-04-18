@@ -7,6 +7,7 @@ const RING_IDLE_OPACITY = 0.7;
 const RING_ACTIVE_OPACITY = 0.95;
 const RING_IDLE_SCALE = 1;
 const RING_PULSE_SCALE = 1.08;
+const DROP_TARGET_CLASS = 'drop-target';
 
 interface SceneEl extends Element {
   addEventListener(event: string, cb: (e: Event) => void): void;
@@ -20,6 +21,7 @@ interface VisualEl extends Element {
 }
 
 interface DropZoneEl extends Element {
+  classList: DOMTokenList;
   object3D: THREE.Object3D;
   sceneEl: SceneEl;
 }
@@ -60,6 +62,7 @@ export function registerDropZone(): void {
       const geo = new THREE.CylinderGeometry(this.data.radius, this.data.radius, 0.05, 32);
       const mat = new THREE.MeshBasicMaterial({ visible: false });
       this.hitMesh = new THREE.Mesh(geo, mat);
+      (this.hitMesh as THREE.Mesh & { el: DropZoneEl }).el = this.el;
       this.el.object3D.add(this.hitMesh);
 
       // Visible ring indicator
@@ -86,6 +89,7 @@ export function registerDropZone(): void {
     setUnlocked(this: DropZoneInstance, unlocked: boolean) {
       this.isUnlocked = unlocked;
       this.hitMesh.visible = unlocked;
+      this.el.classList.toggle(DROP_TARGET_CLASS, unlocked);
       if (!this.ring) return;
       this.ring.object3D.visible = unlocked;
       if (!unlocked) this.setHighlight(false);
