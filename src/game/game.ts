@@ -14,12 +14,8 @@ interface DragEndDetail {
   hoveredZoneEl: Element | null;
 }
 
-interface ZoneDropDetail {
-  zoneId: ZoneId;
-  el: MugEl;
-}
-
 interface DropZoneComponent {
+  data: { label: ZoneId };
   setUnlocked(unlocked: boolean): void;
 }
 
@@ -59,13 +55,17 @@ export class Game {
 
     sceneEl.addEventListener('drag-end', (e: Event) => {
       const { el, hoveredZoneEl } = (e as CustomEvent<DragEndDetail>).detail;
-      if (!hoveredZoneEl) el.components.draggable.snapBack();
-      // if hoveredZoneEl is set, zone-drop fires synchronously next
-    });
-
-    sceneEl.addEventListener('zone-drop', (e: Event) => {
-      const { zoneId, el } = (e as CustomEvent<ZoneDropDetail>).detail;
-      this.handleDrop(zoneId, el);
+      if (!hoveredZoneEl) {
+        el.components.draggable.snapBack();
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const zoneComponent = (hoveredZoneEl as any).components['drop-zone'] as DropZoneComponent | undefined;
+      if (!zoneComponent) {
+        el.components.draggable.snapBack();
+        return;
+      }
+      this.handleDrop(zoneComponent.data.label, el);
     });
 
     this.setMugInteractionEnabled(false);

@@ -9,12 +9,6 @@ const RING_IDLE_SCALE = 1;
 const RING_PULSE_SCALE = 1.08;
 const DROP_TARGET_CLASS = 'drop-target';
 
-interface SceneEl extends Element {
-  addEventListener(event: string, cb: (e: Event) => void): void;
-  removeEventListener(event: string, cb: (e: Event) => void): void;
-  emit(name: string, detail?: unknown): void;
-}
-
 interface VisualEl extends Element {
   object3D: THREE.Object3D;
   setAttribute(name: string, value: string): void;
@@ -23,12 +17,6 @@ interface VisualEl extends Element {
 interface DropZoneEl extends Element {
   classList: DOMTokenList;
   object3D: THREE.Object3D;
-  sceneEl: SceneEl;
-}
-
-interface DragEndDetail {
-  el: Element;
-  hoveredZoneEl: Element | null;
 }
 
 interface DropZoneInstance {
@@ -38,7 +26,6 @@ interface DropZoneInstance {
   hitMesh: THREE.Mesh;
   isUnlocked: boolean;
   isHighlighted: boolean;
-  _onDragEnd: (e: Event) => void;
   setUnlocked(unlocked: boolean): void;
   setHighlight(active: boolean): void;
 }
@@ -77,13 +64,6 @@ export function registerDropZone(): void {
       this.el.appendChild(ring);
       this.ring = ring;
       this.setUnlocked(false);
-
-      this._onDragEnd = this._onDragEnd.bind(this);
-      this.el.sceneEl.addEventListener('drag-end', this._onDragEnd);
-    },
-
-    remove(this: DropZoneInstance) {
-      this.el.sceneEl.removeEventListener('drag-end', this._onDragEnd);
     },
 
     setUnlocked(this: DropZoneInstance, unlocked: boolean) {
@@ -114,12 +94,5 @@ export function registerDropZone(): void {
       this.ring.object3D.scale.setScalar(scale);
     },
 
-    _onDragEnd(this: DropZoneInstance, e: Event) {
-      const { hoveredZoneEl, el } = (e as CustomEvent<DragEndDetail>).detail;
-      this.setHighlight(false);
-      if (this.isUnlocked && hoveredZoneEl === this.el) {
-        this.el.sceneEl.emit('zone-drop', { zoneId: this.data.label, el });
-      }
-    },
   });
 }
