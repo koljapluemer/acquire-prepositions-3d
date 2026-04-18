@@ -30,6 +30,12 @@ interface UIEl extends Element {
 interface ControllerEl extends Element {
   id: string;
   object3D: THREE.Object3D;
+  components: {
+    raycaster?: {
+      raycaster: THREE.Raycaster;
+      updateOriginDirection: () => void;
+    };
+  };
 }
 
 interface DropZoneComponent {
@@ -279,13 +285,13 @@ export function registerDraggable(): void {
     },
 
     getControllerRay(this: DraggableInstance, controllerEl: ControllerEl): THREE.Ray {
-      const origin = new THREE.Vector3();
-      const direction = new THREE.Vector3(0, 0, -1);
-      const quaternion = new THREE.Quaternion();
-      controllerEl.object3D.getWorldPosition(origin);
-      controllerEl.object3D.getWorldQuaternion(quaternion);
-      direction.applyQuaternion(quaternion).normalize();
-      return new THREE.Ray(origin, direction);
+      const raycasterComponent = controllerEl.components.raycaster;
+      if (!raycasterComponent) {
+        throw new Error(`Controller "${controllerEl.id}" is missing the raycaster component.`);
+      }
+
+      raycasterComponent.updateOriginDirection();
+      return raycasterComponent.raycaster.ray.clone();
     },
 
     tryBeginDrag(this: DraggableInstance, ray: THREE.Ray, sourceId: string): boolean {
