@@ -12,6 +12,7 @@ interface SceneEl extends Element {
   canvas: HTMLCanvasElement;
   camera: THREE.Camera;
   emit(name: string, detail?: unknown): void;
+  is(name: string): boolean;
 }
 
 interface DraggableEl extends Element {
@@ -20,6 +21,10 @@ interface DraggableEl extends Element {
 }
 
 interface DropZoneEl extends Element {
+  object3D: THREE.Object3D;
+}
+
+interface UIEl extends Element {
   object3D: THREE.Object3D;
 }
 
@@ -61,6 +66,25 @@ function getMouseNDC(evt: MouseEvent, canvas: HTMLCanvasElement): THREE.Vector2 
     ((evt.clientX - rect.left) / rect.width) * 2 - 1,
     -((evt.clientY - rect.top) / rect.height) * 2 + 1,
   );
+}
+
+function isSceneUIOpen(sceneEl: SceneEl): boolean {
+  return sceneEl.is('ui-open');
+}
+
+function isVisibleInScene(object: THREE.Object3D): boolean {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
+function getUIButtons(): UIEl[] {
+  return Array.from(document.querySelectorAll('.ui-interactable'))
+    .map((el) => el as UIEl)
+    .filter((el) => isVisibleInScene(el.object3D));
 }
 
 function getDropZones(): { el: DropZoneEl; component: DropZoneComponent }[] {
@@ -162,6 +186,9 @@ export function registerDraggable(): void {
       if (this.isResetting) return;
       const mouse = getMouseNDC(evt, this.el.sceneEl.canvas);
       this.raycaster.setFromCamera(mouse, this.el.sceneEl.camera);
+      if (isSceneUIOpen(this.el.sceneEl) || this.raycaster.intersectObjects(getUIButtons().map((el) => el.object3D), true).length > 0) {
+        return;
+      }
       if (this.raycaster.intersectObject(this.el.object3D, true).length === 0) return;
 
       this.el.object3D.position.copy(this.idleBasePosition);
@@ -179,11 +206,20 @@ export function registerDraggable(): void {
     },
 
     _onWindowMouseMove(this: DraggableInstance, evt: MouseEvent) {
+      if (isSceneUIOpen(this.el.sceneEl)) return;
       if (this.isResetting) return;
       const mouse = getMouseNDC(evt, this.el.sceneEl.canvas);
       this.raycaster.setFromCamera(mouse, this.el.sceneEl.camera);
 
       if (!this.isDragging) {
+        if (this.raycaster.intersectObjects(getUIButtons().map((el) => el.object3D), true).length > 0) {
+          if (this.isPointerOver) {
+            this.isPointerOver = false;
+            this.setInteractiveVisual(false);
+          }
+          this.el.sceneEl.canvas.style.cursor = 'default';
+          return;
+        }
         const isPointerOver = this.raycaster.intersectObject(this.el.object3D, true).length > 0;
         if (isPointerOver !== this.isPointerOver) {
           this.isPointerOver = isPointerOver;

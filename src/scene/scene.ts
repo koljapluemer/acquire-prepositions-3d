@@ -10,6 +10,13 @@ const LAYOUT = {
   table: { x: -2.5, y: 2.1, z: -1 },
   chair: { x: 4.5, y: 1.9, z: -.7 },
   mug: { x: 0, y: 4, z: 4.5 },
+  ui: { x: -2.5, y: 6.2, z: -2.35 },
+  uiRot: { x: 0, y: 0, z: 0 },
+};
+
+export const UI_LAYOUT = {
+  position: LAYOUT.ui,
+  rotation: LAYOUT.uiRot,
 };
 
 export const ZONES: Zone[] = [
@@ -46,7 +53,7 @@ export const ZONES: Zone[] = [
   {
     key: 'table-behind',
     pos: { x: -3.5, y: 0.04, z: -3.5 },
-    glossKeys: ['table-below', 'table-next-to'],
+    glossKeys: ['table-behind', 'table-next-to'],
   },
   {
     key: 'chair-below',
@@ -81,7 +88,12 @@ function pos(p: { x: number; y: number; z: number }): string {
 export function buildScene(): void {
   const app = document.getElementById('app')!;
   app.innerHTML = `
-    <a-scene renderer="antialias: true" vr-mode-ui="enabled: false" shadow="type: pcfsoft">
+    <a-scene
+      renderer="antialias: true"
+      cursor__mouse="rayOrigin: mouse"
+      cursor__xrselect="rayOrigin: xrselect"
+      raycaster="objects: .ui-interactable"
+      shadow="type: pcfsoft">
 
       <!-- Environment -->
       <a-sky color="#ffffff"></a-sky>
@@ -105,6 +117,19 @@ export function buildScene(): void {
         mouse-look-limited="maxX: 30; maxY: 60"
         look-controls="enabled: false"
         wasd-controls="enabled: false">
+      </a-entity>
+
+      <a-entity
+        id="left-controller"
+        laser-controls="hand: left"
+        raycaster="objects: .ui-interactable"
+        cursor="rayOrigin: entity; fuse: false">
+      </a-entity>
+      <a-entity
+        id="right-controller"
+        laser-controls="hand: right"
+        raycaster="objects: .ui-interactable"
+        cursor="rayOrigin: entity; fuse: false">
       </a-entity>
 
       <!-- Table -->

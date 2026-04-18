@@ -1,6 +1,6 @@
 import { getGlossKeysWithLanguage, getGlossPrompt } from '../language/glossary.ts';
 import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
-import type { HUD } from '../ui/hud.ts';
+import type { GlossPrompt } from '../language/glossary.ts';
 
 const CORRECT_FEEDBACK_MS = 1500;
 const LEARNING_EVENTS_STORAGE_KEY = 'acquire-prepositions-3d:learning-events';
@@ -30,19 +30,24 @@ interface LearningEvent {
   completedAt: string;
 }
 
+interface GameUI {
+  setInstruction(prompt: GlossPrompt): void;
+  showFeedback(text: string, type: 'success' | 'error'): void;
+}
+
 export class Game {
   private state: GameState = 'playing';
   private target: GlossKey = '';
   private unlockedZoneIds = new Set<ZoneId>();
   private completedGlossKeys = new Set<GlossKey>();
-  private readonly hud: HUD;
+  private readonly ui: GameUI;
   private readonly sceneEl: Element;
   private readonly zones: Zone[];
   private readonly zonesById: Map<ZoneId, Zone>;
   private language: LanguageCode;
 
-  constructor(opts: { hud: HUD; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
-    this.hud = opts.hud;
+  constructor(opts: { ui: GameUI; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
+    this.ui = opts.ui;
     this.sceneEl = opts.sceneEl;
     this.zones = opts.zones;
     this.zonesById = new Map(this.zones.map((zone) => [zone.key, zone]));
@@ -69,7 +74,7 @@ export class Game {
     }
     this.syncUnlockedZones();
     this.target = this.pickTaskFromUnlockedZones();
-    this.hud.setInstruction(getGlossPrompt(this.target, this.language));
+    this.ui.setInstruction(getGlossPrompt(this.target, this.language));
   }
 
   setLanguage(language: LanguageCode): void {
@@ -84,7 +89,7 @@ export class Game {
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
       this.recordLearningEvent(zoneId);
-      this.hud.showFeedback('Correct!', 'success');
+      this.ui.showFeedback('Correct!', 'success');
       setTimeout(() => {
         mugEl.components.draggable.resetToStartWithFade(() => {
           if (this.allUnlockedTasksCompleted()) {
@@ -94,7 +99,7 @@ export class Game {
         });
       }, CORRECT_FEEDBACK_MS);
     } else {
-      this.hud.showFeedback('Try again!', 'error');
+      this.ui.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
       setTimeout(() => { this.state = 'playing'; }, 1000);
     }
