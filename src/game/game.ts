@@ -2,6 +2,11 @@ import { getGlossKeysWithLanguage, getGlossPrompt } from '../language/glossary.t
 import { FeedbackAudio } from '../ui/feedback-audio.ts';
 import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
 import type { GlossPrompt } from '../language/glossary.ts';
+import {
+  nextPlaySessionIndex,
+  trackLearningTaskFinished,
+} from '../analytics/tracking.ts';
+import type { InteractionMode, LearningTaskFinishedEvent, TaskExecutionMode } from '../analytics/tracking.ts';
 
 const CORRECT_FEEDBACK_MS = 1500;
 const LEARNING_EVENTS_STORAGE_KEY = 'acquire-prepositions-3d:learning-events';
@@ -20,11 +25,30 @@ interface DropZoneComponent {
   setUnlocked(unlocked: boolean): void;
 }
 
-interface LearningEvent {
+interface SceneWithComponents extends Element {
+  components?: {
+    'xr-mode'?: { mode?: unknown };
+  };
+}
+
+interface StoredLearningEvent extends LearningTaskFinishedEvent {
   glossKey: GlossKey;
   language: LanguageCode;
-  zoneId: ZoneId;
   completedAt: string;
+}
+
+interface ActiveLearningTask {
+  glossKey: GlossKey;
+  prompt: GlossPrompt;
+  taskIndexInPlaySession: number;
+  startedAt: string;
+  startedAtMs: number;
+  audioReplayCount: number;
+  movedTargetIds: ZoneId[];
+  unlockedTargetIds: ZoneId[];
+  unlockedTaskIds: GlossKey[];
+  wasPreviouslyCompleted: boolean;
+  startedInteractionMode: InteractionMode;
 }
 
 type PendingFeedback =
@@ -48,6 +72,9 @@ export class Game {
   private language: LanguageCode;
   private pendingFeedback: PendingFeedback | null = null;
   private sessionId = 0;
+  private playSessionIndex = 0;
+  private taskIndexInPlaySession = 0;
+  private currentTask: ActiveLearningTask | null = null;
   private readonly feedbackAudio = new FeedbackAudio();
 
   constructor(opts: { ui: GameUI; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
@@ -78,7 +105,11 @@ export class Game {
   }
 
   startRound(): void {
-    if (this.state === 'idle') this.sessionId += 1;
+    if (this.state === 'idle') {
+      this.sessionId += 1;
+      this.playSessionIndex = nextPlaySessionIndex();
+      this.taskIndexInPlaySession = 0;
+    }
     this.clearFeedbackTimer();
     this.state = 'playing';
     if (this.unlockedZoneIds.size === 0) {
@@ -86,7 +117,9 @@ export class Game {
     }
     this.syncUnlockedZones();
     this.target = this.pickTaskFromUnlockedZones();
-    this.ui.setInstruction(getGlossPrompt(this.target, this.language));
+    const prompt = getGlossPrompt(this.target, this.language);
+    this.currentTask = this.createActiveTask(this.target, prompt);
+    this.ui.setInstruction(prompt);
     this.setMugInteractionEnabled(true);
   }
 
@@ -95,6 +128,7 @@ export class Game {
     this.clearFeedbackTimer();
     this.state = 'idle';
     this.target = '';
+    this.currentTask = null;
     this.unlockedZoneIds.clear();
     this.setMugInteractionEnabled(false);
     this.syncUnlockedZones();
@@ -130,10 +164,16 @@ export class Game {
     this.setMugInteractionEnabled(true);
   }
 
+  recordAudioReplay(): void {
+    if (!this.currentTask) return;
+    this.currentTask.audioReplayCount += 1;
+  }
+
   private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
     if (this.state !== 'playing') return;
     this.state = 'feedback';
     this.setMugInteractionEnabled(false);
+    this.currentTask?.movedTargetIds.push(zoneId);
 
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
@@ -188,6 +228,23 @@ export class Game {
     return taskCandidates[Math.floor(Math.random() * taskCandidates.length)];
   }
 
+  private createActiveTask(glossKey: GlossKey, prompt: GlossPrompt): ActiveLearningTask {
+    this.taskIndexInPlaySession += 1;
+    return {
+      glossKey,
+      prompt,
+      taskIndexInPlaySession: this.taskIndexInPlaySession,
+      startedAt: new Date().toISOString(),
+      startedAtMs: performance.now(),
+      audioReplayCount: 0,
+      movedTargetIds: [],
+      unlockedTargetIds: [...this.unlockedZoneIds],
+      unlockedTaskIds: this.getUnlockedCandidateGlossKeys(),
+      wasPreviouslyCompleted: this.completedGlossKeys.has(glossKey),
+      startedInteractionMode: this.getInteractionMode(),
+    };
+  }
+
   private getZoneCandidateGlossKeys(zone: Zone): GlossKey[] {
     return getGlossKeysWithLanguage(zone.glossKeys, this.language);
   }
@@ -198,6 +255,21 @@ export class Game {
         .filter((zone) => this.unlockedZoneIds.has(zone.key))
         .flatMap((zone) => this.getZoneCandidateGlossKeys(zone)),
     )];
+  }
+
+  private getCorrectTargetIds(glossKey: GlossKey): ZoneId[] {
+    return this.zones
+      .filter((zone) => zone.glossKeys.includes(glossKey))
+      .map((zone) => zone.key);
+  }
+
+  private getInteractionMode(): InteractionMode {
+    const mode = (this.sceneEl as SceneWithComponents).components?.['xr-mode']?.mode;
+    return mode === 'vr' ? 'vr' : 'desktop';
+  }
+
+  private getTaskExecutionMode(startedMode: InteractionMode, completedMode: InteractionMode): TaskExecutionMode {
+    return startedMode === completedMode ? completedMode : 'mixed';
   }
 
   private allUnlockedTasksCompleted(): boolean {
@@ -228,45 +300,77 @@ export class Game {
     return ((zoneEl as any)?.components?.['drop-zone'] as DropZoneComponent | undefined) ?? null;
   }
 
-  private recordLearningEvent(zoneId: ZoneId): void {
-    const events = this.loadLearningEvents();
-    const event: LearningEvent = {
-      glossKey: this.target,
+  private recordLearningEvent(correctTargetId: ZoneId): void {
+    if (!this.currentTask) return;
+
+    const task = this.currentTask;
+    const completedAt = new Date().toISOString();
+    const completedInteractionMode = this.getInteractionMode();
+    const movedTargetIds = [...task.movedTargetIds];
+    const event: StoredLearningEvent = {
+      glossKey: task.glossKey,
+      playSessionIndex: this.playSessionIndex,
+      taskIndexInPlaySession: task.taskIndexInPlaySession,
+      executionMode: this.getTaskExecutionMode(task.startedInteractionMode, completedInteractionMode),
+      taskStartedInteractionMode: task.startedInteractionMode,
+      completedInteractionMode,
+      taskStartedAt: task.startedAt,
+      completedAt,
+      timeOnTaskMs: Math.max(0, Math.round(performance.now() - task.startedAtMs)),
+      audioReplayCount: task.audioReplayCount,
+      triesUntilCorrect: movedTargetIds.length,
       language: this.language,
-      zoneId,
-      completedAt: new Date().toISOString(),
+      task: task.glossKey,
+      taskText: task.prompt.text,
+      correctTargetId,
+      correctTargetIds: this.getCorrectTargetIds(task.glossKey),
+      movedTargetIds,
+      wrongTargetIds: movedTargetIds.filter((targetId) => targetId !== correctTargetId),
+      unlockedTargetIds: task.unlockedTargetIds,
+      unlockedTaskIds: task.unlockedTaskIds,
+      wasPreviouslyCompleted: task.wasPreviouslyCompleted,
+      hadAudio: task.prompt.audioUrl !== null,
     };
+
+    const events = this.loadLearningEvents();
     events.push(event);
-    this.completedGlossKeys.add(this.target);
+    this.completedGlossKeys.add(task.glossKey);
     this.saveLearningEvents(events);
+    trackLearningTaskFinished(event);
+    this.currentTask = null;
   }
 
   private loadCompletedGlossKeys(): Set<GlossKey> {
     return new Set(this.loadLearningEvents().map((event) => event.glossKey));
   }
 
-  private loadLearningEvents(): LearningEvent[] {
+  private loadLearningEvents(): StoredLearningEvent[] {
     try {
       const rawEvents = window.localStorage.getItem(LEARNING_EVENTS_STORAGE_KEY);
       if (!rawEvents) return [];
       const events = JSON.parse(rawEvents);
       if (!Array.isArray(events)) return [];
-      return events.filter((event): event is LearningEvent => (
-        typeof event?.glossKey === 'string'
-        && typeof event?.language === 'string'
-        && typeof event?.zoneId === 'string'
-        && typeof event?.completedAt === 'string'
-      ));
+      return events.filter(isStoredLearningEvent);
     } catch {
       return [];
     }
   }
 
-  private saveLearningEvents(events: LearningEvent[]): void {
+  private saveLearningEvents(events: StoredLearningEvent[]): void {
     try {
       window.localStorage.setItem(LEARNING_EVENTS_STORAGE_KEY, JSON.stringify(events));
     } catch {
       // localStorage can fail in private browsing or when quota is exceeded.
     }
   }
+}
+
+function isStoredLearningEvent(event: unknown): event is StoredLearningEvent {
+  return (
+    typeof event === 'object'
+    && event !== null
+    && typeof (event as { glossKey?: unknown }).glossKey === 'string'
+    && typeof (event as { language?: unknown }).language === 'string'
+    && typeof (event as { completedAt?: unknown }).completedAt === 'string'
+  );
 }

@@ -38,6 +38,7 @@ async function startGame(sceneEl: Scene): Promise<void> {
     onLanguageChange: (language) => game?.setLanguage(language),
     onStart: () => game?.startRound(),
     onExit: () => game?.exitGame(),
+    onAudioReplay: () => game?.recordAudioReplay(),
   });
   game = new Game({ ui, sceneEl, zones: ZONES, language: DEFAULT_LANGUAGE });
   setGameTickerGame(game);

@@ -20,6 +20,7 @@ interface SceneUIOptions {
   onLanguageChange: (language: LanguageCode) => void;
   onStart: () => void;
   onExit: () => void;
+  onAudioReplay: () => void;
 }
 
 type FeedbackType = 'success' | 'error';
@@ -33,7 +34,10 @@ const UI = {
   replayHeight: 0.34,
   feedbackHeight: 0.28,
   titleHeight: 0.22,
+  descriptionHeight: 0.34,
+  noticeHeight: 0.46,
   rowHeight: 0.28,
+  startHeight: 0.36,
   gap: 0.08,
   padding: 0.16,
   z: {
@@ -96,6 +100,7 @@ export class SceneUI {
   private readonly onLanguageChange: (language: LanguageCode) => void;
   private readonly onStart: () => void;
   private readonly onExit: () => void;
+  private readonly onAudioReplay: () => void;
   private readonly languageRows = new Map<LanguageCode, SelectableRow>();
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private selectedLanguage: LanguageCode;
@@ -108,15 +113,21 @@ export class SceneUI {
     this.onLanguageChange = opts.onLanguageChange;
     this.onStart = opts.onStart;
     this.onExit = opts.onExit;
+    this.onAudioReplay = opts.onAudioReplay;
 
     const rowCount = this.languages.length;
+    const languageRowsHeight = (
+      rowCount * UI.rowHeight
+      + Math.max(0, rowCount - 1) * (UI.gap * 0.45)
+    );
     const startPanelHeight = (
       UI.padding * 2
       + UI.titleHeight
-      + rowCount * UI.rowHeight
-      + 0.36
-      + 3 * UI.gap
-      + Math.max(0, rowCount - 1) * (UI.gap * 0.45)
+      + UI.descriptionHeight
+      + languageRowsHeight
+      + UI.noticeHeight
+      + UI.startHeight
+      + 4 * UI.gap
     );
     const gamePanelHeight = (
       UI.padding * 2
@@ -155,6 +166,20 @@ export class SceneUI {
     this.startGroup.appendChild(startTitle);
     y -= UI.titleHeight + UI.gap;
 
+    const description = this.createText({
+      x: 0,
+      y: y - UI.descriptionHeight / 2,
+      z: UI.z.text,
+      value: 'Listen to each prompt, then move the mug to the matching place around the table or chair. New targets unlock as you keep practicing.',
+      width: contentWidth,
+      wrapCount: 48,
+      color: UI.colors.textMuted,
+      size: 0.075,
+      align: 'center',
+    });
+    this.startGroup.appendChild(description);
+    y -= UI.descriptionHeight + UI.gap;
+
     for (const language of this.languages) {
       const row = this.createButtonRow({
         value: language.code,
@@ -180,13 +205,28 @@ export class SceneUI {
     }
 
     y -= UI.gap * 0.55;
+    const privacyNotice = this.createText({
+      x: 0,
+      y: y - UI.noticeHeight / 2,
+      z: UI.z.text,
+      value: 'Made by Kolja Sam (koljasam.com). I track page views and pseudonymous learning data, which I may use for (academic) research. Nothing else. Enjoy the game.',
+      width: contentWidth,
+      wrapCount: 56,
+      color: UI.colors.textMuted,
+      size: 0.065,
+      align: 'center',
+    });
+    this.makeClickableLink(privacyNotice, contentWidth, UI.noticeHeight, 'https://koljasam.com');
+    this.startGroup.appendChild(privacyNotice);
+    y -= UI.noticeHeight + UI.gap;
+
     this.startButton = this.createButtonRow({
       value: '__start__',
       label: 'Start game',
       x: 0,
-      y: y - 0.36 / 2,
+      y: y - UI.startHeight / 2,
       width: contentWidth,
-      height: 0.36,
+      height: UI.startHeight,
       selected: false,
       inverse: true,
       marker: false,
@@ -194,7 +234,7 @@ export class SceneUI {
         if (this.state !== 'pre-game') return;
         this.setState('running');
         this.onStart();
-        void this.audio.replay();
+        void this.replayInstructionAudio(false);
       },
     });
     this.startGroup.appendChild(this.startButton.root);
@@ -248,7 +288,7 @@ export class SceneUI {
       selected: false,
       inverse: true,
       marker: false,
-      onSelect: () => void this.audio.replay(),
+      onSelect: () => void this.replayInstructionAudio(true),
     });
     this.gameGroup.appendChild(this.replayButton.root);
     y -= UI.replayHeight + UI.gap;
@@ -278,7 +318,7 @@ export class SceneUI {
     this.instruction.setText(prompt.text, this.selectedLanguage);
     this.audio.setSource(prompt.audioUrl);
     this.setRowEnabled(this.replayButton, this.audio.hasAudio());
-    if (this.audio.isUnlocked()) void this.audio.replay();
+    if (this.audio.isUnlocked()) void this.replayInstructionAudio(false);
   }
 
   showFeedback(text: string, type: FeedbackType): void {
@@ -322,6 +362,11 @@ export class SceneUI {
     }
     this.feedbackBackground.setAttribute('visible', false);
     this.feedback.setAttribute('visible', false);
+  }
+
+  private async replayInstructionAudio(countAsReplay: boolean): Promise<void> {
+    const played = await this.audio.replay();
+    if (played && countAsReplay) this.onAudioReplay();
   }
 
   private createButtonRow(opts: {
@@ -461,6 +506,15 @@ export class SceneUI {
     text.setAttribute('position', `${opts.x} ${opts.y} ${opts.z}`);
     text.setAttribute('text', this.getTextAttribute(opts));
     return text;
+  }
+
+  private makeClickableLink(entity: Entity, width: number, height: number, url: string): void {
+    entity.classList.add('ui-interactable');
+    entity.setAttribute('geometry', { primitive: 'plane', width, height });
+    entity.setAttribute('material', { color: '#ffffff', shader: 'flat', transparent: true, opacity: 0 });
+    entity.addEventListener('click', () => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
   }
 
   private getTextAttribute(opts: {
