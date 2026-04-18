@@ -102,6 +102,7 @@ export function buildScene(): void {
         camera
         position="${pos(LAYOUT.camera)}"
         rotation="${pos(LAYOUT.cameraRot)}"
+        mouse-look-limited="maxX: 30; maxY: 60"
         look-controls="enabled: false"
         wasd-controls="enabled: false">
       </a-entity>
