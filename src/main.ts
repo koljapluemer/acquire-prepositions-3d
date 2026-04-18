@@ -7,7 +7,7 @@ import { registerShadowCatcher } from './components/shadow-catcher.ts';
 import { buildScene, ZONES } from './scene/scene.ts';
 import { HUD } from './ui/hud.ts';
 import { Game } from './game/game.ts';
-import { DEFAULT_LANGUAGE, getLanguageOptions } from './language/glossary.ts';
+import { DEFAULT_LANGUAGE, getLanguageOptions, loadGlossaryData } from './language/glossary.ts';
 
 registerDraggable();
 registerDropZone();
@@ -17,6 +17,11 @@ buildScene();
 
 const sceneEl = document.querySelector('a-scene')!;
 sceneEl.addEventListener('loaded', () => {
+  void startGame(sceneEl);
+});
+
+async function startGame(sceneEl: Element): Promise<void> {
+  await loadGlossaryData();
   let game: Game | null = null;
   const hud = new HUD({
     languages: getLanguageOptions(),
@@ -25,4 +30,4 @@ sceneEl.addEventListener('loaded', () => {
   });
   game = new Game({ hud, sceneEl, zones: ZONES, language: DEFAULT_LANGUAGE });
   game.startRound();
-});
+}

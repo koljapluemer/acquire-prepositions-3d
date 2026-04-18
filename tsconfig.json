@@ -13,9 +13,6 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "paths": {
-      "@public/*": ["./public/*"]
-    },
 
     /* Linting */
     "noUnusedLocals": true,
