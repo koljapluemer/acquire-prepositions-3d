@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 
-const MUG_HOVER_OFFSET = 0.18; // metres above zone surface when snapped
-const MUG_IDLE_BOB_HEIGHT = 0.035;
+const MUG_HOVER_OFFSET = 0.06; // metres above zone surface when snapped
+const MUG_IDLE_BOB_HEIGHT = 0.012;
 const MUG_IDLE_BOB_SPEED = 0.0018;
-const MUG_IDLE_SCALE = 1;
-const MUG_DRAG_SCALE = 1.04;
+const MUG_DRAG_SCALE_FACTOR = 1.04;
 const MUG_RESET_FADE_OUT_MS = 350;
 const MUG_RESET_FADE_IN_MS = 250;
 
@@ -51,6 +50,7 @@ interface DraggableInstance {
   originPosition: THREE.Vector3;
   startPosition: THREE.Vector3;
   idleBasePosition: THREE.Vector3;
+  idleScale: THREE.Vector3;
   dragDepth: number;
   hoveredZone: Element | null;
   raycaster: THREE.Raycaster;
@@ -174,6 +174,7 @@ export function registerDraggable(): void {
     originPosition: null as unknown as THREE.Vector3,
     startPosition: null as unknown as THREE.Vector3,
     idleBasePosition: null as unknown as THREE.Vector3,
+    idleScale: null as unknown as THREE.Vector3,
     dragDepth: 0,
     hoveredZone: null as Element | null,
     raycaster: null as unknown as THREE.Raycaster,
@@ -189,6 +190,7 @@ export function registerDraggable(): void {
       this.originPosition = new THREE.Vector3();
       this.startPosition = this.el.object3D.position.clone();
       this.idleBasePosition = this.el.object3D.position.clone();
+      this.idleScale = this.el.object3D.scale.clone();
       this.dragDepth = 0;
       this.hoveredZone = null;
       this.raycaster = new THREE.Raycaster();
@@ -466,7 +468,8 @@ export function registerDraggable(): void {
     },
 
     setInteractiveVisual(this: DraggableInstance, active: boolean) {
-      this.el.object3D.scale.setScalar(active ? MUG_DRAG_SCALE : MUG_IDLE_SCALE);
+      const factor = active ? MUG_DRAG_SCALE_FACTOR : 1;
+      this.el.object3D.scale.copy(this.idleScale).multiplyScalar(factor);
     },
 
     tick(this: DraggableInstance, time: number) {

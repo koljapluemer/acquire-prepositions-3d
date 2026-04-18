@@ -35,6 +35,10 @@ export function registerXrMode(): void {
     setMode(this: XrModeInstance, mode: InteractionMode) {
       if (this.mode === mode) return;
       this.mode = mode;
+      const desktopCamera = document.getElementById('desktop-camera');
+      const vrCamera = document.getElementById('vr-camera');
+      desktopCamera?.setAttribute('camera', `active: ${mode === 'desktop'}`);
+      vrCamera?.setAttribute('camera', `active: ${mode === 'vr'}`);
       this.el.emit('interaction-mode-change', { mode });
     },
   });

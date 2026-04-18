@@ -14,6 +14,7 @@ interface SceneUIOptions {
   sceneEl: Entity;
   position: Transform;
   rotation: Transform;
+  scale: Transform;
   languages: LanguageOption[];
   selectedLanguage: LanguageCode;
   onLanguageChange: (language: LanguageCode) => void;
@@ -130,6 +131,7 @@ export class SceneUI {
     this.root.id = 'scene-ui';
     this.root.setAttribute('position', this.formatTransform(opts.position));
     this.root.setAttribute('rotation', this.formatTransform(opts.rotation));
+    this.root.setAttribute('scale', this.formatTransform(opts.scale));
     this.sceneEl.appendChild(this.root);
 
     this.startGroup = document.createElement('a-entity') as Entity;

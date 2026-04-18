@@ -30,6 +30,7 @@ async function startGame(sceneEl: Scene): Promise<void> {
     sceneEl,
     position: UI_LAYOUT.position,
     rotation: UI_LAYOUT.rotation,
+    scale: UI_LAYOUT.scale,
     languages: getLanguageOptions(),
     selectedLanguage: DEFAULT_LANGUAGE,
     onLanguageChange: (language) => game?.setLanguage(language),

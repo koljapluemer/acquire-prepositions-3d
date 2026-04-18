@@ -47,7 +47,7 @@ export function registerDropZone(): void {
   AFRAME.registerComponent('drop-zone', {
     schema: {
       label: { type: 'string' },
-      radius: { type: 'number', default: 0.7 },
+      radius: { type: 'number', default: 0.24 },
     },
 
     ring: null as VisualEl | null,
@@ -65,7 +65,7 @@ export function registerDropZone(): void {
       // Visible ring indicator
       const ring = document.createElement('a-torus') as VisualEl;
       ring.setAttribute('radius', String(this.data.radius * 0.85));
-      ring.setAttribute('radius-tubular', '0.03');
+      ring.setAttribute('radius-tubular', '0.012');
       ring.setAttribute('rotation', '-90 0 0');
       ring.setAttribute(
         'material',
