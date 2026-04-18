@@ -18,9 +18,11 @@ interface SceneUIOptions {
   selectedLanguage: LanguageCode;
   onLanguageChange: (language: LanguageCode) => void;
   onStart: () => void;
+  onExit: () => void;
 }
 
 type FeedbackType = 'success' | 'error';
+type SceneUIState = 'pre-game' | 'running';
 
 const TEXTURE_SCALE = 4;
 
@@ -84,6 +86,7 @@ export class SceneUI {
   private readonly startButton: SelectableRow;
   private readonly gameGroup: Entity;
   private readonly instruction: CanvasTextPanel;
+  private readonly exitButton: SelectableRow;
   private readonly replayButton: SelectableRow;
   private readonly feedbackBackground: Entity;
   private readonly feedback: Entity;
@@ -91,9 +94,11 @@ export class SceneUI {
   private readonly languages: LanguageOption[];
   private readonly onLanguageChange: (language: LanguageCode) => void;
   private readonly onStart: () => void;
+  private readonly onExit: () => void;
   private readonly languageRows = new Map<LanguageCode, SelectableRow>();
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private selectedLanguage: LanguageCode;
+  private state: SceneUIState = 'pre-game';
 
   constructor(opts: SceneUIOptions) {
     this.sceneEl = opts.sceneEl;
@@ -101,17 +106,24 @@ export class SceneUI {
     this.selectedLanguage = opts.selectedLanguage;
     this.onLanguageChange = opts.onLanguageChange;
     this.onStart = opts.onStart;
+    this.onExit = opts.onExit;
 
     const rowCount = this.languages.length;
-    const panelHeight = (
+    const startPanelHeight = (
+      UI.padding * 2
+      + UI.titleHeight
+      + rowCount * UI.rowHeight
+      + 0.36
+      + 3 * UI.gap
+      + Math.max(0, rowCount - 1) * (UI.gap * 0.45)
+    );
+    const gamePanelHeight = (
       UI.padding * 2
       + UI.promptHeight
       + UI.replayHeight
+      + UI.replayHeight
       + UI.feedbackHeight
-      + UI.titleHeight
-      + rowCount * UI.rowHeight
-      + 5 * UI.gap
-      + Math.max(0, rowCount - 1) * (UI.gap * 0.45)
+      + 3 * UI.gap
     );
 
     this.root = document.createElement('a-entity') as Entity;
@@ -122,32 +134,63 @@ export class SceneUI {
 
     this.startGroup = document.createElement('a-entity') as Entity;
     this.root.appendChild(this.startGroup);
-    this.startGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, 1.05, UI.colors.panel, UI.z.panel, 0.96));
+    this.startGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, startPanelHeight, UI.colors.panel, UI.z.panel, 0.96));
+    const startContentTop = startPanelHeight / 2 - UI.padding;
+    const contentWidth = UI.panelWidth - UI.padding * 2;
+    let y = startContentTop;
+
     const startTitle = this.createText({
       x: 0,
-      y: 0.24,
+      y: y - UI.titleHeight / 2,
       z: UI.z.text,
-      value: 'Preposition practice',
-      width: UI.panelWidth - UI.padding * 2,
+      value: 'Practice language',
+      width: contentWidth,
       wrapCount: 28,
       color: UI.colors.text,
-      size: 0.17,
+      size: 0.14,
       align: 'center',
     });
     this.startGroup.appendChild(startTitle);
+    y -= UI.titleHeight + UI.gap;
+
+    for (const language of this.languages) {
+      const row = this.createButtonRow({
+        value: language.code,
+        label: language.displayName,
+        x: 0,
+        y: y - UI.rowHeight / 2,
+        width: contentWidth,
+        height: UI.rowHeight,
+        selected: language.code === this.selectedLanguage,
+        inverse: false,
+        marker: true,
+        onSelect: () => {
+          if (this.state !== 'pre-game') return;
+          if (this.selectedLanguage === language.code) return;
+          this.selectedLanguage = language.code;
+          this.onLanguageChange(language.code);
+          this.syncLanguageRows();
+        },
+      });
+      this.languageRows.set(language.code, row);
+      this.startGroup.appendChild(row.root);
+      y -= UI.rowHeight + UI.gap * 0.45;
+    }
+
+    y -= UI.gap * 0.55;
     this.startButton = this.createButtonRow({
       value: '__start__',
       label: 'Start game',
       x: 0,
-      y: -0.18,
-      width: UI.panelWidth - UI.padding * 2,
+      y: y - 0.36 / 2,
+      width: contentWidth,
       height: 0.36,
       selected: false,
       inverse: true,
       marker: false,
       onSelect: () => {
-        this.startGroup.setAttribute('visible', false);
-        this.gameGroup.setAttribute('visible', true);
+        if (this.state !== 'pre-game') return;
+        this.setState('running');
         this.onStart();
         void this.audio.replay();
       },
@@ -157,12 +200,10 @@ export class SceneUI {
     this.gameGroup = document.createElement('a-entity') as Entity;
     this.gameGroup.setAttribute('visible', false);
     this.root.appendChild(this.gameGroup);
-    this.gameGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, panelHeight, UI.colors.panel, UI.z.panel, 0.96));
+    this.gameGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, gamePanelHeight, UI.colors.panel, UI.z.panel, 0.96));
 
-    const contentTop = panelHeight / 2 - UI.padding;
-    const left = -UI.panelWidth / 2 + UI.padding;
-    const contentWidth = UI.panelWidth - UI.padding * 2;
-    let y = contentTop;
+    const gameContentTop = gamePanelHeight / 2 - UI.padding;
+    y = gameContentTop;
 
     this.instruction = new CanvasTextPanel({
       x: 0,
@@ -175,6 +216,25 @@ export class SceneUI {
     this.gameGroup.appendChild(this.createPlane(0, y - UI.promptHeight / 2, contentWidth, UI.promptHeight, UI.colors.prompt, UI.z.row, 0.94));
     this.gameGroup.appendChild(this.instruction.entity);
     y -= UI.promptHeight + UI.gap;
+
+    this.exitButton = this.createButtonRow({
+      value: '__exit__',
+      label: 'Exit game',
+      x: 0,
+      y: y - UI.replayHeight / 2,
+      width: contentWidth,
+      height: UI.replayHeight,
+      selected: false,
+      inverse: false,
+      marker: false,
+      onSelect: () => {
+        if (this.state !== 'running') return;
+        this.onExit();
+        this.setState('pre-game');
+      },
+    });
+    this.gameGroup.appendChild(this.exitButton.root);
+    y -= UI.replayHeight + UI.gap;
 
     this.replayButton = this.createButtonRow({
       value: '__replay__',
@@ -207,46 +267,9 @@ export class SceneUI {
     this.gameGroup.appendChild(this.feedbackBackground);
     this.feedback.setAttribute('visible', false);
     this.gameGroup.appendChild(this.feedback);
-    y -= UI.feedbackHeight + UI.gap;
-
-    const title = this.createText({
-      x: left,
-      y: y - UI.titleHeight / 2,
-      z: UI.z.text,
-      value: 'Practice language',
-      width: contentWidth,
-      wrapCount: 24,
-      color: UI.colors.textMuted,
-      size: 0.12,
-      align: 'left',
-    });
-    this.gameGroup.appendChild(title);
-    y -= UI.titleHeight + UI.gap * 0.55;
-
-    for (const language of this.languages) {
-      const row = this.createButtonRow({
-        value: language.code,
-        label: language.displayName,
-        x: 0,
-        y: y - UI.rowHeight / 2,
-        width: contentWidth,
-        height: UI.rowHeight,
-        selected: language.code === this.selectedLanguage,
-        inverse: false,
-        marker: true,
-        onSelect: () => {
-          if (this.selectedLanguage === language.code) return;
-          this.selectedLanguage = language.code;
-          this.onLanguageChange(language.code);
-          this.syncLanguageRows();
-        },
-      });
-      this.languageRows.set(language.code, row);
-      this.gameGroup.appendChild(row.root);
-      y -= UI.rowHeight + UI.gap * 0.45;
-    }
 
     this.syncLanguageRows();
+    this.setState('pre-game');
   }
 
   setInstruction(prompt: GlossPrompt): void {
@@ -273,6 +296,30 @@ export class SceneUI {
       this.feedback.setAttribute('visible', false);
       this.feedbackTimer = null;
     }, 1200);
+  }
+
+  private setState(state: SceneUIState): void {
+    this.state = state;
+    const isPreGame = state === 'pre-game';
+    this.startGroup.setAttribute('visible', isPreGame);
+    this.gameGroup.setAttribute('visible', !isPreGame);
+    this.clearFeedback();
+
+    this.setRowEnabled(this.startButton, isPreGame);
+    for (const row of this.languageRows.values()) {
+      this.setRowEnabled(row, isPreGame);
+    }
+    this.setRowEnabled(this.exitButton, !isPreGame);
+    this.setRowEnabled(this.replayButton, !isPreGame && this.audio.hasAudio());
+  }
+
+  private clearFeedback(): void {
+    if (this.feedbackTimer !== null) {
+      clearTimeout(this.feedbackTimer);
+      this.feedbackTimer = null;
+    }
+    this.feedbackBackground.setAttribute('visible', false);
+    this.feedback.setAttribute('visible', false);
   }
 
   private createButtonRow(opts: {
@@ -358,11 +405,9 @@ export class SceneUI {
 
   private setRowEnabled(row: SelectableRow, enabled: boolean): void {
     row.root.setAttribute('visible', enabled);
-    if (enabled) {
-      row.root.classList.add('ui-interactable');
-    } else {
-      row.root.classList.remove('ui-interactable');
-    }
+    const method = enabled ? 'add' : 'remove';
+    row.root.classList[method]('ui-interactable');
+    row.background.classList[method]('ui-interactable');
   }
 
   private syncRowVisual(row: SelectableRow, inverse: boolean): void {

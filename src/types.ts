@@ -1,7 +1,7 @@
 export type ZoneId = string;
 export type GlossKey = string;
 export type LanguageCode = string;
-export type GameState = 'playing' | 'feedback';
+export type GameState = 'idle' | 'playing' | 'feedback';
 
 export interface Zone {
   key: ZoneId;

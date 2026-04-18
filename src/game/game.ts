@@ -36,7 +36,7 @@ interface GameUI {
 }
 
 export class Game {
-  private state: GameState = 'playing';
+  private state: GameState = 'idle';
   private target: GlossKey = '';
   private unlockedZoneIds = new Set<ZoneId>();
   private completedGlossKeys = new Set<GlossKey>();
@@ -45,6 +45,8 @@ export class Game {
   private readonly zones: Zone[];
   private readonly zonesById: Map<ZoneId, Zone>;
   private language: LanguageCode;
+  private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private sessionId = 0;
 
   constructor(opts: { ui: GameUI; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
     this.ui = opts.ui;
@@ -68,6 +70,8 @@ export class Game {
   }
 
   startRound(): void {
+    if (this.state === 'idle') this.sessionId += 1;
+    this.clearFeedbackTimer();
     this.state = 'playing';
     if (this.unlockedZoneIds.size === 0) {
       this.unlockRandomZone();
@@ -77,9 +81,19 @@ export class Game {
     this.ui.setInstruction(getGlossPrompt(this.target, this.language));
   }
 
+  exitGame(): void {
+    this.sessionId += 1;
+    this.clearFeedbackTimer();
+    this.state = 'idle';
+    this.target = '';
+    this.unlockedZoneIds.clear();
+    this.syncUnlockedZones();
+    this.resetMug();
+  }
+
   setLanguage(language: LanguageCode): void {
     this.language = language;
-    this.startRound();
+    if (this.state !== 'idle') this.startRound();
   }
 
   private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
@@ -90,8 +104,12 @@ export class Game {
     if (zone?.glossKeys.includes(this.target)) {
       this.recordLearningEvent(zoneId);
       this.ui.showFeedback('Correct!', 'success');
-      setTimeout(() => {
+      const sessionId = this.sessionId;
+      this.feedbackTimer = setTimeout(() => {
+        this.feedbackTimer = null;
+        if (this.sessionId !== sessionId || this.state === 'idle') return;
         mugEl.components.draggable.resetToStartWithFade(() => {
+          if (this.sessionId !== sessionId || this.state === 'idle') return;
           if (this.allUnlockedTasksCompleted()) {
             this.unlockRandomZone();
           }
@@ -101,8 +119,23 @@ export class Game {
     } else {
       this.ui.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
-      setTimeout(() => { this.state = 'playing'; }, 1000);
+      const sessionId = this.sessionId;
+      this.feedbackTimer = setTimeout(() => {
+        this.feedbackTimer = null;
+        if (this.sessionId === sessionId && this.state !== 'idle') this.state = 'playing';
+      }, 1000);
     }
+  }
+
+  private clearFeedbackTimer(): void {
+    if (this.feedbackTimer === null) return;
+    clearTimeout(this.feedbackTimer);
+    this.feedbackTimer = null;
+  }
+
+  private resetMug(): void {
+    const mugEl = this.sceneEl.querySelector('#mug') as MugEl | null;
+    mugEl?.components.draggable.resetToStartWithFade();
   }
 
   private pickTaskFromUnlockedZones(): GlossKey {

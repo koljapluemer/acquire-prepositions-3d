@@ -34,6 +34,7 @@ async function startGame(sceneEl: Scene): Promise<void> {
     selectedLanguage: DEFAULT_LANGUAGE,
     onLanguageChange: (language) => game?.setLanguage(language),
     onStart: () => game?.startRound(),
+    onExit: () => game?.exitGame(),
   });
   game = new Game({ ui, sceneEl, zones: ZONES, language: DEFAULT_LANGUAGE });
 }
