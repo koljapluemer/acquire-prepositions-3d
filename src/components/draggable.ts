@@ -63,8 +63,10 @@ interface DraggableInstance {
   _onCanvasMouseDown: (e: MouseEvent) => void;
   _onWindowMouseMove: (e: MouseEvent) => void;
   _onWindowMouseUp: () => void;
-  _onControllerSelectStart: (e: Event) => void;
-  _onControllerSelectEnd: (e: Event) => void;
+  _onMugCursorMouseDown: (e: Event) => void;
+  _onMugCursorMouseUp: (e: Event) => void;
+  _onControllerRelease: (e: Event) => void;
+  _onControllerDisconnected: (e: Event) => void;
   _onSceneExitVr: () => void;
   getMouseRay: (evt: MouseEvent) => THREE.Ray;
   getControllerRay: (controllerEl: ControllerEl) => THREE.Ray;
@@ -84,6 +86,10 @@ interface MaterialState {
   opacity: number;
   transparent: boolean;
   depthWrite: boolean;
+}
+
+interface CursorEventDetail {
+  cursorEl?: Element;
 }
 
 function getMouseNDC(evt: MouseEvent, canvas: HTMLCanvasElement): THREE.Vector2 {
@@ -204,19 +210,22 @@ export function registerDraggable(): void {
       this._onCanvasMouseDown = this._onCanvasMouseDown.bind(this);
       this._onWindowMouseMove = this._onWindowMouseMove.bind(this);
       this._onWindowMouseUp = this._onWindowMouseUp.bind(this);
-      this._onControllerSelectStart = this._onControllerSelectStart.bind(this);
-      this._onControllerSelectEnd = this._onControllerSelectEnd.bind(this);
+      this._onMugCursorMouseDown = this._onMugCursorMouseDown.bind(this);
+      this._onMugCursorMouseUp = this._onMugCursorMouseUp.bind(this);
+      this._onControllerRelease = this._onControllerRelease.bind(this);
+      this._onControllerDisconnected = this._onControllerDisconnected.bind(this);
       this._onSceneExitVr = this._onSceneExitVr.bind(this);
 
       this.el.sceneEl.canvas.addEventListener('mousedown', this._onCanvasMouseDown);
       window.addEventListener('mousemove', this._onWindowMouseMove);
       window.addEventListener('mouseup', this._onWindowMouseUp);
+      this.el.addEventListener('mousedown', this._onMugCursorMouseDown);
+      this.el.addEventListener('mouseup', this._onMugCursorMouseUp);
       this.el.sceneEl.addEventListener('exit-vr', this._onSceneExitVr);
       this.controllerEls.forEach((controllerEl) => {
-        controllerEl.addEventListener('selectstart', this._onControllerSelectStart);
-        controllerEl.addEventListener('triggerdown', this._onControllerSelectStart);
-        controllerEl.addEventListener('selectend', this._onControllerSelectEnd);
-        controllerEl.addEventListener('triggerup', this._onControllerSelectEnd);
+        controllerEl.addEventListener('selectend', this._onControllerRelease);
+        controllerEl.addEventListener('triggerup', this._onControllerRelease);
+        controllerEl.addEventListener('controllerdisconnected', this._onControllerDisconnected);
       });
     },
 
@@ -224,12 +233,13 @@ export function registerDraggable(): void {
       this.el.sceneEl.canvas.removeEventListener('mousedown', this._onCanvasMouseDown);
       window.removeEventListener('mousemove', this._onWindowMouseMove);
       window.removeEventListener('mouseup', this._onWindowMouseUp);
+      this.el.removeEventListener('mousedown', this._onMugCursorMouseDown);
+      this.el.removeEventListener('mouseup', this._onMugCursorMouseUp);
       this.el.sceneEl.removeEventListener('exit-vr', this._onSceneExitVr);
       this.controllerEls.forEach((controllerEl) => {
-        controllerEl.removeEventListener('selectstart', this._onControllerSelectStart);
-        controllerEl.removeEventListener('triggerdown', this._onControllerSelectStart);
-        controllerEl.removeEventListener('selectend', this._onControllerSelectEnd);
-        controllerEl.removeEventListener('triggerup', this._onControllerSelectEnd);
+        controllerEl.removeEventListener('selectend', this._onControllerRelease);
+        controllerEl.removeEventListener('triggerup', this._onControllerRelease);
+        controllerEl.removeEventListener('controllerdisconnected', this._onControllerDisconnected);
       });
     },
 
@@ -257,10 +267,11 @@ export function registerDraggable(): void {
       this.endDrag('mouse');
     },
 
-    _onControllerSelectStart(this: DraggableInstance, evt: Event) {
+    _onMugCursorMouseDown(this: DraggableInstance, evt: Event) {
       if (this.isResetting) return;
       if (!this.el.sceneEl.is('vr-mode')) return;
-      const controllerEl = evt.currentTarget as ControllerEl | null;
+      const { cursorEl } = (evt as CustomEvent<CursorEventDetail>).detail ?? {};
+      const controllerEl = this.controllerEls.find((el) => el === cursorEl);
       if (!controllerEl) return;
       const sourceId = controllerEl.id;
       if (this.tryBeginDrag(this.getControllerRay(controllerEl), sourceId)) {
@@ -268,10 +279,22 @@ export function registerDraggable(): void {
       }
     },
 
-    _onControllerSelectEnd(this: DraggableInstance, evt: Event) {
+    _onMugCursorMouseUp(this: DraggableInstance, evt: Event) {
+      if (!this.el.sceneEl.is('vr-mode')) return;
+      const { cursorEl } = (evt as CustomEvent<CursorEventDetail>).detail ?? {};
+      const controllerEl = this.controllerEls.find((el) => el === cursorEl);
+      if (!controllerEl) return;
+      this.endDrag(controllerEl.id);
+    },
+
+    _onControllerRelease(this: DraggableInstance, evt: Event) {
       const controllerEl = evt.currentTarget as ControllerEl | null;
       if (!controllerEl) return;
       this.endDrag(controllerEl.id);
+    },
+
+    _onControllerDisconnected(this: DraggableInstance, evt: Event) {
+      if (evt.currentTarget === this.activeControllerEl) this.cancelDrag();
     },
 
     _onSceneExitVr(this: DraggableInstance) {
@@ -481,7 +504,12 @@ export function registerDraggable(): void {
     tick(this: DraggableInstance, time: number) {
       if (this.isDragging) {
         if (this.activeControllerEl) {
-          this.updateDragFromRay(this.getControllerRay(this.activeControllerEl));
+          try {
+            this.updateDragFromRay(this.getControllerRay(this.activeControllerEl));
+          } catch (error) {
+            console.warn('Cancelling mug drag after controller ray update failed.', error);
+            this.cancelDrag();
+          }
         }
         return;
       }
