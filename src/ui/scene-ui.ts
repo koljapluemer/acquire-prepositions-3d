@@ -1,4 +1,5 @@
 import type { Entity } from 'aframe';
+import * as THREE from 'three';
 import type { GlossPrompt, LanguageOption } from '../language/glossary.ts';
 import type { LanguageCode } from '../types.ts';
 import { InstructionAudio } from './instruction-audio.ts';
@@ -16,9 +17,12 @@ interface SceneUIOptions {
   languages: LanguageOption[];
   selectedLanguage: LanguageCode;
   onLanguageChange: (language: LanguageCode) => void;
+  onStart: () => void;
 }
 
 type FeedbackType = 'success' | 'error';
+
+const TEXTURE_SCALE = 4;
 
 const UI = {
   panelWidth: 3.0,
@@ -51,6 +55,17 @@ const UI = {
   },
 };
 
+const INSTRUCTION_FONT_FAMILY = [
+  'system-ui',
+  '"Segoe UI"',
+  '"Noto Sans"',
+  '"Noto Sans Arabic"',
+  '"Noto Sans Thai"',
+  '"Noto Sans Vietnamese"',
+  'Arial',
+  'sans-serif',
+].join(', ');
+
 interface SelectableRow {
   root: Entity;
   background: Entity;
@@ -65,13 +80,17 @@ interface SelectableRow {
 export class SceneUI {
   private readonly sceneEl: Entity;
   private readonly root: Entity;
-  private readonly instruction: Entity;
+  private readonly startGroup: Entity;
+  private readonly startButton: SelectableRow;
+  private readonly gameGroup: Entity;
+  private readonly instruction: CanvasTextPanel;
   private readonly replayButton: SelectableRow;
   private readonly feedbackBackground: Entity;
   private readonly feedback: Entity;
   private readonly audio = new InstructionAudio();
   private readonly languages: LanguageOption[];
   private readonly onLanguageChange: (language: LanguageCode) => void;
+  private readonly onStart: () => void;
   private readonly languageRows = new Map<LanguageCode, SelectableRow>();
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private selectedLanguage: LanguageCode;
@@ -81,6 +100,7 @@ export class SceneUI {
     this.languages = opts.languages;
     this.selectedLanguage = opts.selectedLanguage;
     this.onLanguageChange = opts.onLanguageChange;
+    this.onStart = opts.onStart;
 
     const rowCount = this.languages.length;
     const panelHeight = (
@@ -100,26 +120,60 @@ export class SceneUI {
     this.root.setAttribute('rotation', this.formatTransform(opts.rotation));
     this.sceneEl.appendChild(this.root);
 
-    this.root.appendChild(this.createPlane(0, 0, UI.panelWidth, panelHeight, UI.colors.panel, UI.z.panel, 0.96));
+    this.startGroup = document.createElement('a-entity') as Entity;
+    this.root.appendChild(this.startGroup);
+    this.startGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, 1.05, UI.colors.panel, UI.z.panel, 0.96));
+    const startTitle = this.createText({
+      x: 0,
+      y: 0.24,
+      z: UI.z.text,
+      value: 'Preposition practice',
+      width: UI.panelWidth - UI.padding * 2,
+      wrapCount: 28,
+      color: UI.colors.text,
+      size: 0.17,
+      align: 'center',
+    });
+    this.startGroup.appendChild(startTitle);
+    this.startButton = this.createButtonRow({
+      value: '__start__',
+      label: 'Start game',
+      x: 0,
+      y: -0.18,
+      width: UI.panelWidth - UI.padding * 2,
+      height: 0.36,
+      selected: false,
+      inverse: true,
+      marker: false,
+      onSelect: () => {
+        this.startGroup.setAttribute('visible', false);
+        this.gameGroup.setAttribute('visible', true);
+        this.onStart();
+        void this.audio.replay();
+      },
+    });
+    this.startGroup.appendChild(this.startButton.root);
+
+    this.gameGroup = document.createElement('a-entity') as Entity;
+    this.gameGroup.setAttribute('visible', false);
+    this.root.appendChild(this.gameGroup);
+    this.gameGroup.appendChild(this.createPlane(0, 0, UI.panelWidth, panelHeight, UI.colors.panel, UI.z.panel, 0.96));
 
     const contentTop = panelHeight / 2 - UI.padding;
     const left = -UI.panelWidth / 2 + UI.padding;
     const contentWidth = UI.panelWidth - UI.padding * 2;
     let y = contentTop;
 
-    this.instruction = this.createText({
+    this.instruction = new CanvasTextPanel({
       x: 0,
       y: y - UI.promptHeight / 2,
       z: UI.z.text,
-      value: '',
       width: contentWidth - 0.22,
-      wrapCount: 30,
+      height: UI.promptHeight - 0.1,
       color: UI.colors.textInverse,
-      size: 0.19,
-      align: 'center',
     });
-    this.root.appendChild(this.createPlane(0, y - UI.promptHeight / 2, contentWidth, UI.promptHeight, UI.colors.prompt, UI.z.row, 0.94));
-    this.root.appendChild(this.instruction);
+    this.gameGroup.appendChild(this.createPlane(0, y - UI.promptHeight / 2, contentWidth, UI.promptHeight, UI.colors.prompt, UI.z.row, 0.94));
+    this.gameGroup.appendChild(this.instruction.entity);
     y -= UI.promptHeight + UI.gap;
 
     this.replayButton = this.createButtonRow({
@@ -134,7 +188,7 @@ export class SceneUI {
       marker: false,
       onSelect: () => void this.audio.replay(),
     });
-    this.root.appendChild(this.replayButton.root);
+    this.gameGroup.appendChild(this.replayButton.root);
     y -= UI.replayHeight + UI.gap;
 
     this.feedback = this.createText({
@@ -150,9 +204,9 @@ export class SceneUI {
     });
     this.feedbackBackground = this.createPlane(0, y - UI.feedbackHeight / 2, contentWidth, UI.feedbackHeight, UI.colors.prompt, UI.z.row, 0.86);
     this.feedbackBackground.setAttribute('visible', false);
-    this.root.appendChild(this.feedbackBackground);
+    this.gameGroup.appendChild(this.feedbackBackground);
     this.feedback.setAttribute('visible', false);
-    this.root.appendChild(this.feedback);
+    this.gameGroup.appendChild(this.feedback);
     y -= UI.feedbackHeight + UI.gap;
 
     const title = this.createText({
@@ -166,7 +220,7 @@ export class SceneUI {
       size: 0.12,
       align: 'left',
     });
-    this.root.appendChild(title);
+    this.gameGroup.appendChild(title);
     y -= UI.titleHeight + UI.gap * 0.55;
 
     for (const language of this.languages) {
@@ -188,7 +242,7 @@ export class SceneUI {
         },
       });
       this.languageRows.set(language.code, row);
-      this.root.appendChild(row.root);
+      this.gameGroup.appendChild(row.root);
       y -= UI.rowHeight + UI.gap * 0.45;
     }
 
@@ -196,17 +250,10 @@ export class SceneUI {
   }
 
   setInstruction(prompt: GlossPrompt): void {
-    this.instruction.setAttribute('text', this.getTextAttribute({
-      value: prompt.text,
-      width: UI.panelWidth - UI.padding * 2 - 0.22,
-      wrapCount: 30,
-      color: UI.colors.textInverse,
-      size: 0.19,
-      align: 'center',
-    }));
+    this.instruction.setText(prompt.text, this.selectedLanguage);
     this.audio.setSource(prompt.audioUrl);
     this.setRowEnabled(this.replayButton, this.audio.hasAudio());
-    void this.audio.replay();
+    if (this.audio.isUnlocked()) void this.audio.replay();
   }
 
   showFeedback(text: string, type: FeedbackType): void {
@@ -400,4 +447,142 @@ export class SceneUI {
   private formatTransform(transform: Transform): string {
     return `${transform.x} ${transform.y} ${transform.z}`;
   }
+}
+
+class CanvasTextPanel {
+  readonly entity: Entity;
+  private readonly canvas = document.createElement('canvas');
+  private readonly context: CanvasRenderingContext2D;
+  private readonly texture: THREE.CanvasTexture;
+  private readonly color: string;
+
+  constructor(opts: {
+    x: number;
+    y: number;
+    z: number;
+    width: number;
+    height: number;
+    color: string;
+  }) {
+    this.color = opts.color;
+    this.canvas.width = Math.round(opts.width * 512 * TEXTURE_SCALE);
+    this.canvas.height = Math.round(opts.height * 512 * TEXTURE_SCALE);
+
+    const context = this.canvas.getContext('2d');
+    if (!context) throw new Error('Could not create instruction text canvas.');
+    this.context = context;
+
+    this.texture = new THREE.CanvasTexture(this.canvas);
+    this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.texture.minFilter = THREE.LinearFilter;
+    this.texture.magFilter = THREE.LinearFilter;
+    this.texture.generateMipmaps = false;
+
+    const material = new THREE.MeshBasicMaterial({
+      map: this.texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(opts.width, opts.height), material);
+
+    this.entity = document.createElement('a-entity') as Entity;
+    this.entity.setAttribute('position', `${opts.x} ${opts.y} ${opts.z}`);
+    this.entity.object3D.add(mesh);
+    this.setText('', 'eng');
+  }
+
+  setText(text: string, language: LanguageCode): void {
+    const direction = getTextDirection(language);
+    const lines = this.layoutText(text, direction);
+    const context = this.context;
+
+    context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    context.direction = direction;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = this.color;
+    context.font = this.getFont(lines.fontSize);
+
+    const lineHeight = lines.fontSize * 1.25;
+    const totalHeight = lineHeight * lines.values.length;
+    const firstBaseline = (this.canvas.height - totalHeight) / 2 + lineHeight / 2;
+    const x = this.canvas.width / 2;
+
+    lines.values.forEach((line, index) => {
+      context.fillText(line, x, firstBaseline + index * lineHeight);
+    });
+
+    this.texture.needsUpdate = true;
+  }
+
+  private layoutText(text: string, direction: CanvasDirection): { values: string[]; fontSize: number } {
+    const maxWidth = this.canvas.width * 0.9;
+    const maxHeight = this.canvas.height * 0.86;
+    const maxLines = 3;
+
+    const minFontSize = Math.round(this.canvas.height * 0.12);
+    for (let fontSize = Math.round(this.canvas.height * 0.34); fontSize >= minFontSize; fontSize -= 2) {
+      this.context.font = this.getFont(fontSize);
+      this.context.direction = direction;
+      const lines = this.wrapText(text, maxWidth);
+      if (lines.length <= maxLines && lines.length * fontSize * 1.25 <= maxHeight) {
+        return { values: lines, fontSize };
+      }
+    }
+
+    this.context.font = this.getFont(minFontSize);
+    this.context.direction = direction;
+    return { values: this.wrapText(text, maxWidth), fontSize: minFontSize };
+  }
+
+  private wrapText(text: string, maxWidth: number): string[] {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [''];
+
+    const lines: string[] = [];
+    let line = '';
+
+    for (const word of words) {
+      if (line === '') {
+        line = this.fitWord(word, maxWidth, lines);
+        continue;
+      }
+
+      const candidate = `${line} ${word}`;
+      if (this.context.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+        continue;
+      }
+
+      lines.push(line);
+      line = this.fitWord(word, maxWidth, lines);
+    }
+
+    if (line !== '') lines.push(line);
+    return lines;
+  }
+
+  private fitWord(word: string, maxWidth: number, lines: string[]): string {
+    if (this.context.measureText(word).width <= maxWidth) return word;
+
+    let line = '';
+    for (const char of [...word]) {
+      const candidate = `${line}${char}`;
+      if (this.context.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+        continue;
+      }
+      if (line !== '') lines.push(line);
+      line = char;
+    }
+    return line;
+  }
+
+  private getFont(fontSize: number): string {
+    return `600 ${fontSize}px ${INSTRUCTION_FONT_FAMILY}`;
+  }
+}
+
+function getTextDirection(language: LanguageCode): CanvasDirection {
+  return language === 'arb' ? 'rtl' : 'ltr';
 }

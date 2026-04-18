@@ -90,9 +90,10 @@ export function buildScene(): void {
   app.innerHTML = `
     <a-scene
       renderer="antialias: true"
+      xr-mode
       cursor__mouse="rayOrigin: mouse"
       cursor__xrselect="rayOrigin: xrselect"
-      raycaster="objects: .ui-interactable"
+      raycaster="objects: .ui-interactable, .grabbable"
       shadow="type: pcfsoft">
 
       <!-- Environment -->
@@ -122,13 +123,13 @@ export function buildScene(): void {
       <a-entity
         id="left-controller"
         laser-controls="hand: left"
-        raycaster="objects: .ui-interactable"
+        raycaster="objects: .ui-interactable, .grabbable"
         cursor="rayOrigin: entity; fuse: false">
       </a-entity>
       <a-entity
         id="right-controller"
         laser-controls="hand: right"
-        raycaster="objects: .ui-interactable"
+        raycaster="objects: .ui-interactable, .grabbable"
         cursor="rayOrigin: entity; fuse: false">
       </a-entity>
 
@@ -153,6 +154,7 @@ export function buildScene(): void {
       <!-- Mug (draggable) -->
       <a-entity
         id="mug"
+        class="grabbable"
         gltf-model="${MUG_MODEL}"
         scale="1 1 1"
         position="${pos(LAYOUT.mug)}"

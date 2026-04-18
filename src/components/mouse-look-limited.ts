@@ -9,6 +9,7 @@ interface MouseLookLimitedEl extends Element {
   object3D: THREE.Object3D;
   sceneEl: {
     canvas: HTMLCanvasElement;
+    is(name: string): boolean;
   };
 }
 
@@ -53,6 +54,7 @@ export function registerMouseLookLimited(): void {
     },
 
     _onMouseMove(this: MouseLookLimitedInstance, evt: MouseEvent) {
+      if (this.el.sceneEl.is('vr-mode')) return;
       const rect = this.el.sceneEl.canvas.getBoundingClientRect();
       const normalizedX = THREE.MathUtils.clamp(((evt.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
       const normalizedY = THREE.MathUtils.clamp(((evt.clientY - rect.top) / rect.height) * 2 - 1, -1, 1);
@@ -65,6 +67,7 @@ export function registerMouseLookLimited(): void {
     },
 
     tick(this: MouseLookLimitedInstance) {
+      if (this.el.sceneEl.is('vr-mode')) return;
       this.el.object3D.position.copy(this.startPosition);
       this.el.object3D.rotation.z = THREE.MathUtils.degToRad(this.startRotation.z);
     },
