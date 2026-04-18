@@ -3,6 +3,7 @@ import type { Scene } from 'aframe';
 import './style.css';
 import { registerDraggable } from './components/draggable.ts';
 import { registerDropZone } from './components/drop-zone.ts';
+import { registerGameTicker, setGameTickerGame } from './components/game-ticker.ts';
 import { registerMouseLookLimited } from './components/mouse-look-limited.ts';
 import { registerShadowCatcher } from './components/shadow-catcher.ts';
 import { registerXrMode } from './components/xr-mode.ts';
@@ -13,6 +14,7 @@ import { SceneUI } from './ui/scene-ui.ts';
 
 registerDraggable();
 registerDropZone();
+registerGameTicker();
 registerMouseLookLimited();
 registerShadowCatcher();
 registerXrMode();
@@ -38,4 +40,6 @@ async function startGame(sceneEl: Scene): Promise<void> {
     onExit: () => game?.exitGame(),
   });
   game = new Game({ ui, sceneEl, zones: ZONES, language: DEFAULT_LANGUAGE });
+  setGameTickerGame(game);
+  sceneEl.setAttribute('game-ticker', '');
 }

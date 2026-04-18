@@ -50,9 +50,9 @@ export function registerDraggable(): void {
       this.controller.dispose();
     },
 
-    tick(this: DraggableInstance, time: number) {
+    tick(this: DraggableInstance, time: number, delta: number) {
       this.vrInput.tick();
-      this.controller.tick(time);
+      this.controller.tick(time, delta);
     },
 
     setInteractionEnabled(this: DraggableInstance, enabled: boolean) {

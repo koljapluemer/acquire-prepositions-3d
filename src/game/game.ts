@@ -26,6 +26,10 @@ interface LearningEvent {
   completedAt: string;
 }
 
+type PendingFeedback =
+  | { kind: 'correct'; sessionId: number; mugEl: MugEl; remainingMs: number }
+  | { kind: 'wrong'; sessionId: number; remainingMs: number };
+
 interface GameUI {
   setInstruction(prompt: GlossPrompt): void;
   showFeedback(text: string, type: 'success' | 'error'): void;
@@ -41,7 +45,7 @@ export class Game {
   private readonly zones: Zone[];
   private readonly zonesById: Map<ZoneId, Zone>;
   private language: LanguageCode;
-  private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingFeedback: PendingFeedback | null = null;
   private sessionId = 0;
 
   constructor(opts: { ui: GameUI; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
@@ -100,6 +104,30 @@ export class Game {
     if (this.state !== 'idle') this.startRound();
   }
 
+  tick(_time: number, delta: number): void {
+    if (!this.pendingFeedback) return;
+    this.pendingFeedback.remainingMs -= delta;
+    if (this.pendingFeedback.remainingMs > 0) return;
+
+    const pending = this.pendingFeedback;
+    this.pendingFeedback = null;
+    if (this.sessionId !== pending.sessionId || this.state === 'idle') return;
+
+    if (pending.kind === 'correct') {
+      pending.mugEl.components.draggable.resetToStartWithFade(() => {
+        if (this.sessionId !== pending.sessionId || this.state === 'idle') return;
+        if (this.allUnlockedTasksCompleted()) {
+          this.unlockRandomZone();
+        }
+        this.startRound();
+      });
+      return;
+    }
+
+    this.state = 'playing';
+    this.setMugInteractionEnabled(true);
+  }
+
   private handleDrop(zoneId: ZoneId, mugEl: MugEl): void {
     if (this.state !== 'playing') return;
     this.state = 'feedback';
@@ -109,36 +137,25 @@ export class Game {
     if (zone?.glossKeys.includes(this.target)) {
       this.recordLearningEvent(zoneId);
       this.ui.showFeedback('Correct!', 'success');
-      const sessionId = this.sessionId;
-      this.feedbackTimer = setTimeout(() => {
-        this.feedbackTimer = null;
-        if (this.sessionId !== sessionId || this.state === 'idle') return;
-        mugEl.components.draggable.resetToStartWithFade(() => {
-          if (this.sessionId !== sessionId || this.state === 'idle') return;
-          if (this.allUnlockedTasksCompleted()) {
-            this.unlockRandomZone();
-          }
-          this.startRound();
-        });
-      }, CORRECT_FEEDBACK_MS);
+      this.pendingFeedback = {
+        kind: 'correct',
+        sessionId: this.sessionId,
+        mugEl,
+        remainingMs: CORRECT_FEEDBACK_MS,
+      };
     } else {
       this.ui.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
-      const sessionId = this.sessionId;
-      this.feedbackTimer = setTimeout(() => {
-        this.feedbackTimer = null;
-        if (this.sessionId === sessionId && this.state !== 'idle') {
-          this.state = 'playing';
-          this.setMugInteractionEnabled(true);
-        }
-      }, 1000);
+      this.pendingFeedback = {
+        kind: 'wrong',
+        sessionId: this.sessionId,
+        remainingMs: 1000,
+      };
     }
   }
 
   private clearFeedbackTimer(): void {
-    if (this.feedbackTimer === null) return;
-    clearTimeout(this.feedbackTimer);
-    this.feedbackTimer = null;
+    this.pendingFeedback = null;
   }
 
   private resetMug(): void {

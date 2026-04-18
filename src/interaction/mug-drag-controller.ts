@@ -20,6 +20,23 @@ interface MaterialState {
   depthWrite: boolean;
 }
 
+interface SnapAnimation {
+  generation: number;
+  startPos: THREE.Vector3;
+  target: THREE.Vector3;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+interface ResetAnimation {
+  generation: number;
+  phase: 'fade-out' | 'fade-in';
+  elapsedMs: number;
+  durationMs: number;
+  states: MaterialState[];
+  onComplete?: () => void;
+}
+
 function isVisibleInScene(object: THREE.Object3D): boolean {
   let current: THREE.Object3D | null = object;
   while (current) {
@@ -69,6 +86,8 @@ export class MugDragController {
   private materialStates: MaterialState[] | null = null;
   private motionGeneration = 0;
   private resetGeneration = 0;
+  private snapAnimation: SnapAnimation | null = null;
+  private resetAnimation: ResetAnimation | null = null;
   private readonly opts: {
     mugEl: MugEl;
     sceneEl: SceneEl;
@@ -110,7 +129,9 @@ export class MugDragController {
     }
   }
 
-  tick(time: number): void {
+  tick(time: number, delta: number): void {
+    if (this.updateResetAnimation(delta)) return;
+    if (this.updateSnapAnimation(delta)) return;
     if (this.isDragging || this.isSnapping || this.isResetting) return;
 
     const bob = Math.sin(time * MUG_IDLE_BOB_SPEED) * MUG_IDLE_BOB_HEIGHT;
@@ -136,32 +157,23 @@ export class MugDragController {
   snapBack(): void {
     const target = this.originPosition.clone();
     const startPos = this.opts.mugEl.object3D.position.clone();
-    const duration = 300;
-    const startTime = performance.now();
     const generation = ++this.motionGeneration;
     this.isSnapping = true;
     this.syncRaycastable();
-
-    const animate = (now: number) => {
-      if (generation !== this.motionGeneration) return;
-
-      const t = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      this.opts.mugEl.object3D.position.lerpVectors(startPos, target, eased);
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.idleBasePosition.copy(target);
-        this.isSnapping = false;
-        this.syncRaycastable();
-      }
+    this.snapAnimation = {
+      generation,
+      startPos,
+      target,
+      elapsedMs: 0,
+      durationMs: 300,
     };
-    requestAnimationFrame(animate);
   }
 
   resetToStartWithFade(onComplete?: () => void): void {
     const generation = ++this.resetGeneration;
     this.motionGeneration += 1;
+    this.snapAnimation = null;
+    this.resetAnimation = null;
     this.restoreMaterialState();
 
     const states = this.getMaterialStates();
@@ -188,23 +200,21 @@ export class MugDragController {
       material.depthWrite = false;
       material.needsUpdate = true;
     });
-
-    this.fadeMaterials(states, 1, 0, MUG_RESET_FADE_OUT_MS, generation, () => {
-      this.moveToStart();
-
-      this.fadeMaterials(states, 0, 1, MUG_RESET_FADE_IN_MS, generation, () => {
-        if (generation !== this.resetGeneration) return;
-        this.restoreMaterialState();
-        this.isResetting = false;
-        this.syncRaycastable();
-        onComplete?.();
-      });
-    });
+    this.resetAnimation = {
+      generation,
+      phase: 'fade-out',
+      elapsedMs: 0,
+      durationMs: MUG_RESET_FADE_OUT_MS,
+      states,
+      onComplete,
+    };
   }
 
   dispose(): void {
     this.resetGeneration += 1;
     this.motionGeneration += 1;
+    this.snapAnimation = null;
+    this.resetAnimation = null;
     this.restoreMaterialState();
     this.setHoveredZone(null);
     this.setRaycastable(true);
@@ -365,34 +375,65 @@ export class MugDragController {
     });
   }
 
-  private fadeMaterials(
-    states: MaterialState[],
-    fromFactor: number,
-    toFactor: number,
-    duration: number,
-    generation: number,
-    onComplete: () => void,
-  ): void {
-    const startTime = performance.now();
+  private updateSnapAnimation(delta: number): boolean {
+    if (!this.snapAnimation) return false;
+    if (this.snapAnimation.generation !== this.motionGeneration) {
+      this.snapAnimation = null;
+      return false;
+    }
 
-    const animate = (now: number) => {
-      if (generation !== this.resetGeneration) return;
+    this.snapAnimation.elapsedMs += delta;
+    const t = Math.min(this.snapAnimation.elapsedMs / this.snapAnimation.durationMs, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    this.opts.mugEl.object3D.position.lerpVectors(this.snapAnimation.startPos, this.snapAnimation.target, eased);
 
-      const t = Math.min((now - startTime) / duration, 1);
-      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      const opacityFactor = THREE.MathUtils.lerp(fromFactor, toFactor, eased);
-      states.forEach(({ material, opacity }) => {
-        material.opacity = opacity * opacityFactor;
-        material.needsUpdate = true;
-      });
+    if (t >= 1) {
+      this.idleBasePosition.copy(this.snapAnimation.target);
+      this.snapAnimation = null;
+      this.isSnapping = false;
+      this.syncRaycastable();
+    }
+    return true;
+  }
 
-      if (t < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        onComplete();
-      }
-    };
+  private updateResetAnimation(delta: number): boolean {
+    if (!this.resetAnimation) return false;
+    if (this.resetAnimation.generation !== this.resetGeneration) {
+      this.resetAnimation = null;
+      return false;
+    }
 
-    requestAnimationFrame(animate);
+    this.resetAnimation.elapsedMs += delta;
+    const t = Math.min(this.resetAnimation.elapsedMs / this.resetAnimation.durationMs, 1);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const fromFactor = this.resetAnimation.phase === 'fade-out' ? 1 : 0;
+    const toFactor = this.resetAnimation.phase === 'fade-out' ? 0 : 1;
+    const opacityFactor = THREE.MathUtils.lerp(fromFactor, toFactor, eased);
+
+    this.resetAnimation.states.forEach(({ material, opacity }) => {
+      material.opacity = opacity * opacityFactor;
+      material.needsUpdate = true;
+    });
+
+    if (t < 1) return true;
+
+    if (this.resetAnimation.phase === 'fade-out') {
+      this.moveToStart();
+      this.resetAnimation = {
+        ...this.resetAnimation,
+        phase: 'fade-in',
+        elapsedMs: 0,
+        durationMs: MUG_RESET_FADE_IN_MS,
+      };
+      return true;
+    }
+
+    const onComplete = this.resetAnimation.onComplete;
+    this.resetAnimation = null;
+    this.restoreMaterialState();
+    this.isResetting = false;
+    this.syncRaycastable();
+    onComplete?.();
+    return true;
   }
 }
