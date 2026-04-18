@@ -1,4 +1,5 @@
 import { getGlossKeysWithLanguage, getGlossPrompt } from '../language/glossary.ts';
+import { FeedbackAudio } from '../ui/feedback-audio.ts';
 import type { ZoneId, GameState, GlossKey, LanguageCode, Zone } from '../types.ts';
 import type { GlossPrompt } from '../language/glossary.ts';
 
@@ -47,6 +48,7 @@ export class Game {
   private language: LanguageCode;
   private pendingFeedback: PendingFeedback | null = null;
   private sessionId = 0;
+  private readonly feedbackAudio = new FeedbackAudio();
 
   constructor(opts: { ui: GameUI; sceneEl: Element; zones: Zone[]; language: LanguageCode }) {
     this.ui = opts.ui;
@@ -136,6 +138,7 @@ export class Game {
     const zone = this.zonesById.get(zoneId);
     if (zone?.glossKeys.includes(this.target)) {
       this.recordLearningEvent(zoneId);
+      this.feedbackAudio.play('success');
       this.ui.showFeedback('Correct!', 'success');
       this.pendingFeedback = {
         kind: 'correct',
@@ -144,6 +147,7 @@ export class Game {
         remainingMs: CORRECT_FEEDBACK_MS,
       };
     } else {
+      this.feedbackAudio.play('error');
       this.ui.showFeedback('Try again!', 'error');
       mugEl.components.draggable.snapBack();
       this.pendingFeedback = {
