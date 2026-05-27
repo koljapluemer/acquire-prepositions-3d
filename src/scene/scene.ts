@@ -13,9 +13,9 @@ const LAYOUT = {
   table: { x: -0.8, y: 0.67, z: -0.32 },
   chair: { x: 1.44, y: 0.61, z: -0.22 },
   mug: { x: 0, y: 1.28, z: 1.2 },
-  ui: { x: -1.15, y: 2, z: -2 },
+  ui: { x: -1.32, y: 3.2, z: -2 },
   uiRot: { x: 0, y: 0, z: 0 },
-  uiScale: { x: 0.48, y: 0.48, z: 0.48 },
+  uiScale: { x: 1, y: 1, z: 1 },
 };
 
 export const UI_LAYOUT = {
